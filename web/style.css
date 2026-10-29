@@ -1,0 +1,6 @@
+html, body { margin: 0; height: 100%; overflow: hidden; background: #05070d; }
+canvas { display: block; }
+#info {
+  position: fixed; top: 12px; left: 16px; right: 16px;
+  color: #cfd8e6; font: 14px/1.4 system-ui, sans-serif; pointer-events: none;
+}
