@@ -1,90 +1,114 @@
-"""First draft: GNSS clock drift and positioning error, relativistic vs Newtonian.
-Run: python main.py   (saves drift.png and error.png)"""
+"""First draft: GPS coverage and dilution of precision (DOP) by Monte Carlo.
+
+Non-rotating spherical Earth, nominal 24-satellite constellation (6 planes x 4).
+Random surface points + random times -> how many satellites are visible above an
+elevation mask, and how good is the geometry (DOP)?
+Run: python main.py   (saves coverage.png, prints checks)
+"""
 import numpy as np
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
-C, GM, R_E = 299792458.0, 3.986004418e14, 6371e3   # m/s, m^3/s^2, m
-A = 26560e3                                          # GPS-like orbit radius (m)
+GM, R_E = 3.986004418e14, 6371e3        # m^3/s^2, m
+A = 26560e3                              # GPS orbit radius (m)
 N_PLANES, PER_PLANE, INC = 6, 4, np.radians(55)
-OMEGA = np.sqrt(GM / A**3)                           # orbital angular rate
-
-# Config: planet is non-rotating, receiver sits at a fixed point on the surface.
-CONFIG = dict(relativity=True, compensate=False)
-RX = R_E * np.array([np.cos(np.radians(40)), 0, np.sin(np.radians(40))])
+N_SAT = N_PLANES * PER_PLANE
+PERIOD = 2 * np.pi * np.sqrt(A**3 / GM)  # ~11.97 h
+MASK = np.radians(5)                     # elevation mask (mountains / buildings)
+rng = np.random.default_rng(0)
 
 def sat_positions(t):
-    """Newtonian circular orbits at time t (scalar or per-satellite array) -> (n_sat, 3)."""
-    n = N_PLANES * PER_PLANE
-    idx = np.arange(n)
-    raan = 2 * np.pi * (idx // PER_PLANE) / N_PLANES
-    u = OMEGA * t + 2 * np.pi * (idx % PER_PLANE) / PER_PLANE + (idx // PER_PLANE) * 0.3
-    x, y = A * np.cos(u), A * np.sin(u)
-    px, py, pz = x, y * np.cos(INC), y * np.sin(INC)
-    cr, sr = np.cos(raan), np.sin(raan)
-    return np.stack([cr * px - sr * py, sr * px + cr * py, pz], axis=1)
+    """Circular orbits. t has shape (n,) -> positions (n, N_SAT, 3), Earth-centred."""
+    idx = np.arange(N_SAT)
+    plane, slot = idx // PER_PLANE, idx % PER_PLANE
+    raan = 2 * np.pi * plane / N_PLANES                        # plane orientation
+    u0 = 2 * np.pi * slot / PER_PLANE + plane * 2 * np.pi / N_SAT  # phase in orbit (staggered)
+    u = 2 * np.pi * t[:, None] / PERIOD + u0                   # argument of latitude
+    x, y = A * np.cos(u), A * np.sin(u)                        # in-plane coordinates
+    px, py, pz = x, y * np.cos(INC), y * np.sin(INC)           # tilt by inclination
+    cr, sr = np.cos(raan), np.sin(raan)                        # rotate about z by RAAN
+    return np.stack([cr * px - sr * py, sr * px + cr * py, pz], axis=-1)
 
-# Fractional clock-rate offset of satellite clock vs ground clock (weak-field GR + SR):
-#   d(tau)/dt = 1 - GM/(r c^2) - v^2/(2c^2),   v^2 = GM/A for a circular orbit
-RATE_SAT = -GM / (A * C**2) - GM / (2 * A * C**2)
-RATE_GROUND = -GM / (R_E * C**2)
-REL_OFFSET = RATE_SAT - RATE_GROUND                  # ~ +4.46e-10 (~38.5 us/day)
+def random_points(n):
+    """n points uniform on the sphere of radius R_E (normalised Gaussians)."""
+    v = rng.normal(size=(n, 3))
+    return R_E * v / np.linalg.norm(v, axis=1, keepdims=True)
 
-def clock_error(t, relativity, compensate):
-    """Satellite clock reading minus ground-clock time (s)."""
-    if not relativity:
-        return np.zeros_like(t)                      # Newtonian: all clocks tick alike
-    rate = REL_OFFSET - (REL_OFFSET if compensate else 0.0)  # factory offset removes it
-    return rate * t
+def visibility(rx, sats):
+    """Unit line-of-sight vectors (n, N_SAT, 3) and boolean mask of sats above MASK."""
+    d = sats - rx[:, None, :]
+    u = d / np.linalg.norm(d, axis=-1, keepdims=True)
+    up = rx / R_E                                              # local vertical
+    sin_el = np.einsum("nsk,nk->ns", u, up)
+    return u, sin_el > np.sin(MASK)
 
-def solve_position(t_rx, relativity, compensate, guess):
-    """Pseudorange fix with a known receiver clock: Gauss-Newton on 3 unknowns."""
-    # Signal emission time (true), found by iterating the light travel time.
-    tau = 0.07
-    for _ in range(5):
-        sats = sat_positions(t_rx - tau)
-        tau = np.linalg.norm(sats - RX, axis=1) / C
-    t_tx = t_rx - tau
-    # visible satellites: above the local horizon
-    vis = ((sats - RX) @ RX) / (np.linalg.norm(sats - RX, axis=1) * R_E) > np.sin(np.radians(5))
-    # measured pseudorange uses the (possibly drifted) satellite clock stamp
-    stamp = t_tx + clock_error(t_tx, relativity, compensate)
-    rho = C * (t_rx - stamp)
-    x = guess.copy()
-    for _ in range(10):
-        d = np.linalg.norm(sats[vis] - x, axis=1)
-        Jm = (x - sats[vis]) / d[:, None]
-        dx = np.linalg.lstsq(Jm, rho[vis] - d, rcond=None)[0]
-        x = x + dx
-    return x, vis.sum()
+def dops(u, vis):
+    """DOP from visible sats. Row of G is [-u, 1] (x, y, z, clock). Q = (G^T G)^-1.
+    GDOP = sqrt(tr Q), PDOP = sqrt(Qxx+Qyy+Qzz). Returns NaN if < 4 sats or singular."""
+    G = np.concatenate([-u, np.ones(u.shape[:-1] + (1,))], axis=-1)   # (n, S, 4)
+    GtG = np.einsum("nsi,ns,nsj->nij", G, vis.astype(float), G)       # sum over visible only
+    ok = (vis.sum(axis=1) >= 4) & (np.abs(np.linalg.det(GtG)) > 1e-9)
+    Q = np.full_like(GtG, np.nan)
+    Q[ok] = np.linalg.inv(GtG[ok])
+    pdop = np.sqrt(Q[:, 0, 0] + Q[:, 1, 1] + Q[:, 2, 2])
+    gdop = np.sqrt(pdop**2 + Q[:, 3, 3])
+    return pdop, gdop
+
+def one_sat_fraction():
+    """Analytic: Earth central angle seen by a satellite at radius A with mask e is
+    lam = arccos(R cos e / A) - e; the visible cap covers (1 - cos lam) / 2 of the sphere."""
+    lam = np.arccos(R_E * np.cos(MASK) / A) - MASK
+    return (1 - np.cos(lam)) / 2
+
+def check_dop_by_hand():
+    """Hand case: one sat at zenith + three on the horizon, 120 deg apart in azimuth.
+    G^T G is block-diagonal, so by hand PDOP = sqrt(8/3) = 1.633, GDOP = sqrt(3) = 1.732."""
+    u = np.array([[[0, 0, 1], [1, 0, 0], [-.5, np.sqrt(3) / 2, 0], [-.5, -np.sqrt(3) / 2, 0]]])
+    p, g = dops(u, np.ones((1, 4), bool))
+    print(f"[check] hand DOP case: PDOP {p[0]:.4f} (exact {np.sqrt(8/3):.4f}), "
+          f"GDOP {g[0]:.4f} (exact {np.sqrt(3):.4f})")
+    assert np.isclose(p[0], np.sqrt(8 / 3)) and np.isclose(g[0], np.sqrt(3))
 
 if __name__ == "__main__":
-    days = 2
-    t = np.arange(0, days * 86400, 600.0)            # one fix every 10 minutes
-    cases = {"Newtonian": (False, False),
-             "Relativistic, uncompensated": (True, False),
-             "Relativistic, compensated": (True, True)}
+    check_dop_by_hand()
+    n = 20000
+    rx = random_points(n)
+    t = rng.uniform(0, PERIOD, n)
+    u, vis = visibility(rx, sat_positions(t))
+    nvis = vis.sum(axis=1)
+    pdop, gdop = dops(u, vis)
 
-    plt.figure(figsize=(7, 4))
-    for name, (rel, comp) in cases.items():
-        plt.plot(t / 86400, clock_error(t, rel, comp) * 1e6, label=name)
-    plt.xlabel("time (days)"); plt.ylabel("satellite clock error (µs)")
-    plt.title("Clock drift vs ground time"); plt.legend(); plt.tight_layout()
-    plt.savefig("drift.png", dpi=120)
+    # Check 1: one satellite's simulated coverage vs the analytic cap fraction.
+    sim, exact = vis[:, 0].mean(), one_sat_fraction()
+    se = np.sqrt(exact * (1 - exact) / n)
+    print(f"[check] 1 sat coverage: MC {sim:.4f} vs analytic {exact:.4f} (std err {se:.4f})")
+    assert abs(sim - exact) < 4 * se
 
-    plt.figure(figsize=(7, 4))
-    for name, (rel, comp) in cases.items():
-        err = []
-        for ti in t:
-            x, _ = solve_position(ti, rel, comp, RX + 1e3)
-            err.append(np.linalg.norm(x - RX))
-        print(f"{name:30s} final error = {err[-1]:.3f} m")
-        plt.semilogy(t / 86400, np.maximum(err, 1e-6), label=name)
-    plt.xlabel("time (days)"); plt.ylabel("position error (m)")
-    plt.title("Positioning error"); plt.legend(); plt.tight_layout()
-    plt.savefig("error.png", dpi=120)
+    # Check 2: compare to the SPS Performance Standard style numbers.
+    good = pdop <= 6
+    print(f"[result] mean visible = {nvis.mean():.2f}, min = {nvis.min()}, max = {nvis.max()}")
+    print(f"[result] P(>=4 visible) = {(nvis >= 4).mean():.4f}")
+    print(f"[result] P(PDOP <= 6)   = {good.mean():.4f}   (SPS standard: >= 0.98)")
+    print(f"[result] median PDOP = {np.nanmedian(pdop):.2f}, median GDOP = {np.nanmedian(gdop):.2f}")
 
-    print(f"Relativistic rate offset: {REL_OFFSET * 86400e6:.2f} µs/day "
-          f"(Ashby 2003: ~38.4 µs/day with Earth rotation)")
-    print(f"Uncompensated range drift: {REL_OFFSET * C * 86400 / 1e3:.2f} km/day")
+    # Figure: visible-count histogram, PDOP CDF, mean visible sats vs latitude.
+    fig, ax = plt.subplots(1, 3, figsize=(14, 4))
+    vals, counts = np.unique(nvis, return_counts=True)
+    ax[0].bar(vals, counts / n)
+    ax[0].set(xlabel="satellites visible", ylabel="fraction of samples", title="Visible satellites")
+    p = np.sort(pdop[~np.isnan(pdop)])
+    ax[1].plot(p, np.arange(1, p.size + 1) / n)
+    ax[1].axvline(6, ls="--", c="gray")
+    ax[1].set(xlim=(0, 10), xlabel="PDOP", ylabel="cumulative fraction", title="PDOP distribution")
+    lat = np.degrees(np.arcsin(rx[:, 2] / R_E))
+    bins = np.linspace(-90, 90, 19)
+    mid = (bins[:-1] + bins[1:]) / 2
+    which = np.digitize(lat, bins) - 1
+    ax[2].plot(mid, [nvis[which == k].mean() for k in range(18)], "o-")
+    ax[2].set(xlabel="latitude (deg)", ylabel="mean visible satellites", title="Coverage vs latitude")
+    for a in ax:
+        a.grid(alpha=0.3)
+    plt.tight_layout()
+    plt.savefig("coverage.png", dpi=120)
+    print("saved coverage.png")
