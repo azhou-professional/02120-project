@@ -14,9 +14,55 @@
 </head>
 <body>
   <div id="info">
-    <strong>GPS constellation</strong> &middot; 24 satellites, 6 planes &times; 4, 55&deg; inclination<br>
-    Drag to rotate &middot; scroll / pinch to zoom
+    <strong>GPS constellation</strong><br>
+    Drag to rotate &middot; scroll / pinch to zoom<br>
+    Hover a satellite for its orbit
   </div>
+
+  <aside id="panel">
+    <div class="row">
+      <div id="counter">Satellites: <strong id="count">0</strong></div>
+      <button id="playpause">Pause</button>
+    </div>
+
+    <section>
+      <h2>Monte Carlo DOP</h2>
+      <div class="grid">
+        <label>Elevation mask (&deg;) <input id="mc-mask" type="number" value="5" min="0" max="89" step="1"></label>
+        <label>Samples <input id="mc-n" type="number" value="5000" min="100" max="200000" step="1000"></label>
+      </div>
+      <button id="mc-run">Run Monte Carlo</button>
+      <div id="mc-out"></div>
+    </section>
+
+    <section>
+      <h2>Add satellite</h2>
+      <div class="grid">
+        <label>Altitude (km) <input id="add-alt" type="number" value="20200" min="200" step="100"></label>
+        <label>Inclination (&deg;) <input id="add-inc" type="number" value="55" min="0" max="180" step="1"></label>
+        <label>RAAN (&deg;) <input id="add-raan" type="number" value="0" step="1"></label>
+        <label>Phase (&deg;) <input id="add-phase" type="number" value="0" step="1"></label>
+      </div>
+      <button id="add-btn">Add satellite</button>
+      <div id="add-err" class="err"></div>
+    </section>
+
+    <section>
+      <h2>Satellites</h2>
+      <div class="row">
+        <button id="reset-btn">Reset to GPS 24</button>
+        <button id="clear-btn">Remove all</button>
+      </div>
+      <ul id="list"></ul>
+    </section>
+  </aside>
+
+  <div id="tooltip" hidden>
+    <h3 id="tt-name"></h3>
+    <dl id="tt-body"></dl>
+    <button id="tt-remove">Remove satellite</button>
+  </div>
+
   <script type="module" src="app.js"></script>
 </body>
 </html>

@@ -1,6 +1,55 @@
 html, body { margin: 0; height: 100%; overflow: hidden; background: #05070d; }
+body { color: #cfd8e6; font: 14px/1.4 system-ui, sans-serif; }
 canvas { display: block; }
-#info {
-  position: fixed; top: 12px; left: 16px; right: 16px;
-  color: #cfd8e6; font: 14px/1.4 system-ui, sans-serif; pointer-events: none;
+button, input { font: inherit; }
+button {
+  background: #1f3a5f; color: #e8f0fb; border: 1px solid #3a5f8f; border-radius: 4px;
+  padding: 5px 10px; cursor: pointer;
 }
+button:hover { background: #2b4d7d; }
+input {
+  width: 100%; box-sizing: border-box; background: #0d1422; color: #e8f0fb;
+  border: 1px solid #2c3d57; border-radius: 4px; padding: 4px 6px;
+}
+
+#info { position: fixed; top: 12px; left: 16px; pointer-events: none; }
+
+#panel {
+  position: fixed; top: 12px; right: 12px; bottom: 12px; width: min(290px, 88vw);
+  overflow-y: auto; box-sizing: border-box; padding: 12px;
+  background: rgba(10, 16, 28, 0.88); border: 1px solid #22324b; border-radius: 8px;
+}
+#panel section { margin-top: 14px; border-top: 1px solid #22324b; padding-top: 10px; }
+#panel h2 { margin: 0 0 8px; font-size: 14px; color: #8fb8e8; }
+.row { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+#counter strong { font-size: 20px; }
+.grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px; }
+.grid label { font-size: 12px; color: #9fb0c8; }
+#mc-run, #add-btn { width: 100%; }
+.err { color: #ff8a8a; font-size: 12px; min-height: 1em; margin-top: 4px; }
+
+#mc-out { margin-top: 8px; font-size: 13px; }
+#mc-out table { border-collapse: collapse; width: 100%; }
+#mc-out td { padding: 1px 0; }
+#mc-out td:last-child { text-align: right; font-variant-numeric: tabular-nums; }
+.hist { display: flex; align-items: flex-end; gap: 3px; height: 60px; margin-top: 8px; }
+.hist div { flex: 1; text-align: center; font-size: 10px; display: flex; flex-direction: column; justify-content: flex-end; height: 100%; }
+.hist span { background: #4dabff; display: block; min-height: 1px; }
+.hist-title { font-size: 11px; color: #9fb0c8; margin-top: 8px; }
+
+#list { list-style: none; margin: 8px 0 0; padding: 0; max-height: 200px; overflow-y: auto; }
+#list li { display: flex; justify-content: space-between; align-items: center; padding: 2px 0; }
+#list li button { padding: 0 7px; }
+.dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 6px; }
+
+#tooltip {
+  position: fixed; z-index: 10; min-width: 210px; padding: 10px 12px;
+  background: rgba(10, 16, 28, 0.95); border: 1px solid #3a5f8f; border-radius: 6px;
+}
+#tooltip[hidden] { display: none; }
+#tooltip h3 { margin: 0 0 6px; font-size: 15px; }
+#tooltip dl { display: grid; grid-template-columns: auto auto; gap: 1px 12px; margin: 0 0 8px; font-size: 13px; }
+#tooltip dt { color: #9fb0c8; }
+#tooltip dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; }
+#tt-remove { width: 100%; background: #5f1f2a; border-color: #8f3a4a; }
+#tt-remove:hover { background: #7d2b3a; }
