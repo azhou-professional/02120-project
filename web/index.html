@@ -24,26 +24,33 @@
       <div id="counter">Satellites: <strong id="count">0</strong></div>
       <button id="playpause">Pause</button>
     </div>
+    <button id="axes-btn" class="wide">Axes &amp; planes: off</button>
 
     <section>
-      <h2>Monte Carlo DOP</h2>
-      <div class="grid">
-        <label>Elevation mask (&deg;) <input id="mc-mask" type="number" value="5" min="0" max="89" step="1"></label>
-        <label>Samples <input id="mc-n" type="number" value="5000" min="100" max="200000" step="1000"></label>
-      </div>
-      <button id="mc-run">Run Monte Carlo</button>
-      <div id="mc-out"></div>
+      <h2>Elevation mask</h2>
+      <canvas id="mask-canvas" height="125"></canvas>
+      <div class="hint">Drag the yellow handle up or down. Satellites below the line (red) are blocked by buildings or mountains. The green cone on the globe is the sky a receiver in Pittsburgh can see.</div>
+      <label class="inline">Mask (&deg;) <input id="mask-input" type="number" value="5" min="0" max="89" step="1"></label>
+      <div id="recv"></div>
     </section>
 
     <section>
+      <h2>Monte Carlo DOP</h2>
+      <label class="inline">Samples <input id="mc-n" type="number" value="5000" min="100" max="200000" step="1000"></label>
+      <button id="mc-run" class="wide">Run Monte Carlo</button>
+      <div id="mc-out"></div>
+    </section>
+
+    <section id="add-section">
       <h2>Add satellite</h2>
       <div class="grid">
-        <label>Altitude (km) <input id="add-alt" type="number" value="20200" min="200" step="100"></label>
-        <label>Inclination (&deg;) <input id="add-inc" type="number" value="55" min="0" max="180" step="1"></label>
-        <label>RAAN (&deg;) <input id="add-raan" type="number" value="0" step="1"></label>
-        <label>Phase (&deg;) <input id="add-phase" type="number" value="0" step="1"></label>
+        <label>Altitude (km) <input id="add-alt" type="number" value="15000" min="200" step="500"></label>
+        <label>Inclination (&deg;) <input id="add-inc" type="number" value="40" min="0" max="180" step="5"></label>
+        <label>RAAN (&deg;) <input id="add-raan" type="number" value="30" step="5"></label>
+        <label>Phase (&deg;) <input id="add-phase" type="number" value="0" step="15"></label>
       </div>
-      <button id="add-btn">Add satellite</button>
+      <div class="hint">While you edit, the dashed white orbit and arrows on the globe show the path the new satellite will follow. The solid white dot is where it starts.</div>
+      <button id="add-btn" class="wide">Add satellite</button>
       <div id="add-err" class="err"></div>
     </section>
 
