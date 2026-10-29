@@ -1,6 +1,7 @@
 // Checks for orbit.js and dop.js. Open test.html in a browser (or see README of the run command).
 import { R_E, A, INC, N_SAT, nominalConstellation, satPosition } from "./orbit.js";
 import { dopFromUnits, monteCarlo } from "./dop.js";
+import { isLand } from "./earth.js";
 
 const results = [];
 const check = (name, ok, detail) => results.push(`${ok ? "PASS" : "FAIL"}  ${name}  ${detail}`);
@@ -57,6 +58,17 @@ const all = monteCarlo(sats, { n, maskDeg: 5, rng: seeded(2) });
 check("mean visible ~ 8.12", Math.abs(all.meanVis - 8.12) < 0.1, `got ${all.meanVis.toFixed(3)}`);
 check("median PDOP ~ 1.72", Math.abs(all.medPdop - 1.72) < 0.05, `got ${all.medPdop.toFixed(3)}`);
 check("P(PDOP <= 6) >= 0.98 (SPS standard)", all.pGood >= 0.98, `got ${all.pGood.toFixed(4)}`);
+
+// 6. Low-poly Earth map: known places must be land or sea (lat, lon).
+const places = [["Pittsburgh", 40.4, -80, true], ["London", 51.5, -0.1, true], ["Cairo", 30, 31.2, true], ["Tokyo", 35.7, 139.7, true],
+  ["Sydney", -33.9, 151.2, true], ["Sao Paulo", -23.5, -46.6, true], ["Moscow", 55.8, 37.6, true], ["Beijing", 39.9, 116.4, true],
+  ["Mumbai", 19.1, 72.9, true], ["Cape Town", -33.9, 18.5, true], ["South Pole", -90, 0, true], ["Sahara", 23, 12, true],
+  ["Reykjavik", 64.1, -21.9, true], ["Nairobi", -1.3, 36.8, true], ["Mexico City", 19.4, -99.1, true],
+  ["mid-Pacific", 0, -150, false], ["mid-Atlantic", 20, -40, false], ["Indian Ocean", -20, 80, false], ["Mediterranean", 34, 18, false],
+  ["Black Sea", 43, 34, false], ["Caspian Sea", 42, 51, false], ["North Pole", 89, 0, false], ["Gulf of Mexico", 25, -90, false],
+  ["Southern Ocean", -55, 100, false], ["Bay of Bengal", 14, 88, false], ["Arabian Sea", 15, 65, false]];
+const wrong = places.filter(([, lat, lon, land]) => isLand(lat, lon) !== land).map((p) => p[0]);
+check("map: 26 known places land/sea", wrong.length === 0, wrong.length ? "wrong: " + wrong.join(", ") : "all correct");
 
 const bad = results.filter((r) => r.startsWith("FAIL")).length;
 document.getElementById("out").textContent = results.join("\n") + `\n\n${bad === 0 ? "ALL PASSED" : bad + " FAILED"}`;
