@@ -350,8 +350,8 @@ $("add-btn").onclick = () => {
 $("mc-run").onclick = () => {
   const n = Math.round(parseFloat($("mc-n").value));
   const out = $("mc-out"), btn = $("mc-run");
-  if (!(n >= 100 && n <= 200000)) {
-    out.textContent = "Samples must be 100-200000.";
+  if (!(n >= 1 && n <= 200000)) {
+    out.textContent = "Samples must be 1-200000.";
     return;
   }
   btn.disabled = true;
