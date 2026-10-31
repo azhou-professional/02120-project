@@ -8,13 +8,15 @@ const MAX_VIZ_CHUNK = 4000;   // cap on trials per request when visualizing
 const SUMMARY_MS = 250;       // how often the running summary is refreshed
 const MAX_TRIALS = 1_000_000;
 const MIN_RATE = 1, MAX_RATE = 2000;
+const DEFAULT_WINDOW_S = 365 * 86400;   // random times are drawn from one year (the window control comes in the next step)
 const BAR = "#3987e5", BAR_FEW = UNDEFINED_RGB;  // bars with >= 4 satellites / fewer than 4
 
 const $ = (id) => document.getElementById(id);
 const pct = (x, d = 2) => `${(100 * x).toFixed(d)} %`;
 const f = (x, d = 2) => (x === null || x === undefined ? "–" : x.toFixed(d));
 
-export function initMonteCarlo(globe) {
+// getElements(): the elements table (rows of 6 numbers) of the satellites that are switched on
+export function initMonteCarlo(globe, getElements) {
   let worker = null, ready = false, runCounter = 0, run = null, lastSummary = null;
 
   // ---- worker ------------------------------------------------------------------------
@@ -65,6 +67,12 @@ export function initMonteCarlo(globe) {
     const seedText = $("mc-seed").value.trim();
     const seed = seedText === "" || !(parseInt(seedText, 10) >= 0) ? -1 : parseInt(seedText, 10);   // -1 = random
 
+    const elements = getElements();
+    if (elements.length === 0) {
+      $("mc-status").textContent = "No satellites are switched on. Use the Constellation tab.";
+      return;
+    }
+
     const now = performance.now();
     run = { id: ++runCounter, n, pdopMax, started: false, done: 0, inflight: false, finished: false,
             carry: 0, lastT: now, lastSpawn: now, lastSummaryAt: 0 };
@@ -73,7 +81,7 @@ export function initMonteCarlo(globe) {
     $("mc-progress").value = 0;
     setRunning(true);
     $("mc-status").textContent = "Starting…";
-    worker.postMessage({ cmd: "start", runId: run.id, n, seed, pdopMax });
+    worker.postMessage({ cmd: "start", runId: run.id, n, seed, pdopMax, elements, windowS: DEFAULT_WINDOW_S });
   }
 
   function finish(message) {
@@ -163,6 +171,7 @@ export function initMonteCarlo(globe) {
 
     $("r-done").textContent = `${s.n_done.toLocaleString()} / ${s.n.toLocaleString()}`;
     $("r-seed").textContent = s.seed;
+    $("r-config").textContent = `${s.n_satellites} satellites / ${f(s.window_days, 1)} days`;
     $("mc-mask-note").textContent = `(elevation mask ${s.mask_deg}°)`;
     $("r-mean").textContent = `${f(ns.mean, 3)} ± ${f(ns.se, 3)}`;
     const z = ns.se ? (ns.mean - ns.expected_mean) / ns.se : null;

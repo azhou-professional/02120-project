@@ -1,9 +1,10 @@
 // Glue: load Python (Pyodide), then on every change ask Python for the state of the sky
 // and hand the result to the globe, the sky plot and the readout.
 import { createGlobe } from "./globe.js";
-import { drawSkyplot, PLANE_COLORS } from "./skyplot.js";
+import { drawSkyplot } from "./skyplot.js";
 import { loadSim } from "./pyloader.js";
 import { initMonteCarlo } from "./mc.js";
+import { initConstellation } from "./constellation.js";
 import { loadLandMask } from "./earth.js";
 
 const $ = (id) => document.getElementById(id);
@@ -32,7 +33,6 @@ const lonText = (x) => `${nf(Math.abs(x), 1)}° ${x >= 0 ? "E" : "W"}`;
 /** HTML for the satellite hover tooltip; every number comes from Python's snapshot. */
 function satelliteInfoHtml(s, i) {
   const [a, ecc, inc, raan, argp] = s.elements[i];
-  const plane = s.planes[i];
   const circular = ecc === 0;
   const rows = [
     circular
@@ -49,24 +49,26 @@ function satelliteInfoHtml(s, i) {
     ["Speed", `${nf(s.speed_kms[i], 2)} km/s`],
     ["Point below it", `${latText(s.sat_lat[i])}, ${lonText(s.sat_lon[i])}`],
     ["From the receiver", `elevation ${nf(s.el[i], 1)}°, azimuth ${nf(s.az[i], 1)}°<br>` +
-                          (s.visible[i] ? "above the mask: used" : "not used (below the mask)")],
+                          (!s.enabled[i] ? "switched off: ignored" : s.visible[i] ? "above the mask: used" : "not used (below the mask)")],
   ];
-  return `<div class="name"><span class="dot" style="background:${PLANE_COLORS[plane]}"></span>` +
-         `${s.names[i]} <span style="color:var(--muted);font-weight:400">plane ${s.names[i][0]}</span></div>` +
-         `<table>${rows.map(([k, v]) => `<tr><td>${k}</td><td>${v}</td></tr>`).join("")}</table>`;
+  return `<div class="name"><span class="dot" style="background:${s.colors[i]}"></span>` +
+         `${s.labels[i]} <span style="color:var(--muted);font-weight:400">${s.groupLabels[i]}</span></div>` +
+         `<table>${rows.map(([k, v]) => `<tr><td>${k}</td><td>${v}</td></tr>`).join("")}</table>` +
+         `<div style="color:var(--muted);margin-top:4px">Click to switch ${s.enabled[i] ? "off" : "on"}</div>`;
 }
+
+const TABS = ["live", "mc", "cs"];
 
 function setupTabs(onShow) {
   const show = (which) => {
-    for (const [name, btn] of [["live", "tab-btn-live"], ["mc", "tab-btn-mc"]]) {
+    for (const name of TABS) {
       $(`tab-${name}`).hidden = name !== which;
-      $(btn).classList.toggle("active", name === which);
-      $(btn).setAttribute("aria-selected", name === which);
+      $(`tab-btn-${name}`).classList.toggle("active", name === which);
+      $(`tab-btn-${name}`).setAttribute("aria-selected", name === which);
     }
     onShow(which);
   };
-  $("tab-btn-live").addEventListener("click", () => show("live"));
-  $("tab-btn-mc").addEventListener("click", () => show("mc"));
+  for (const name of TABS) $(`tab-btn-${name}`).addEventListener("click", () => show(name));
 }
 
 async function main() {
@@ -77,6 +79,7 @@ async function main() {
   let t = 0, playing = false, dirty = true, last = performance.now();
   let lastSnap = null;
   const hover = { i: -1, x: 0, y: 0 };            // satellite under the mouse (-1 = none)
+  let cons;                                       // the constellation (set up once the globe exists)
 
   function renderTip() {
     const tip = $("sat-tip");
@@ -96,13 +99,17 @@ async function main() {
       dirty = true;
     },
     (i, x, y) => { Object.assign(hover, { i, x, y }); renderTip(); },
-    land);
-  globe.addRings(JSON.parse(api.orbit_rings()));
+    land,
+    (i) => cons.toggleSat(i));
 
-  const mc = initMonteCarlo(globe);
+  cons = initConstellation(api, { globe, onChange: () => { dirty = true; } });
+  cons.addPreset("gps");
+  window.app = { api, globe, cons };       // for poking around in the browser console, and for browser tests
+
+  const mc = initMonteCarlo(globe, () => cons.activeElements());
   setupTabs((which) => {
     if (which === "mc") { mc.ensureWorker(); mc.redraw(); }
-    else dirty = true;                     // the sky plot was skipped while hidden; redraw it
+    if (which === "live") dirty = true;    // the sky plot was skipped while hidden; redraw it
   });
 
   function refresh() {
@@ -110,7 +117,7 @@ async function main() {
     const lon = parseFloat($("lon").value);
     if (!Number.isFinite(lat) || !Number.isFinite(lon)) return;
 
-    const snap = JSON.parse(api.snapshot(lat, lon, t));
+    const snap = cons.decorate(JSON.parse(api.snapshot(lat, lon, t)));   // add labels and colours
     lastSnap = snap;
     globe.update(snap);
     renderTip();
@@ -121,12 +128,12 @@ async function main() {
     $("n").textContent = snap.n_visible;
     for (const k of ["gdop", "pdop", "hdop", "vdop", "tdop"]) $(k).textContent = fmt(snap.dop[k]);
 
-    const rows = snap.names
-      .map((name, i) => ({ name, az: snap.az[i], el: snap.el[i], vis: snap.visible[i], plane: snap.planes[i] }))
+    const rows = snap.labels
+      .map((name, i) => ({ name, az: snap.az[i], el: snap.el[i], vis: snap.visible[i], color: snap.colors[i] }))
       .filter((s) => s.vis)
       .sort((a, b) => b.el - a.el);
     $("sats").tBodies[0].innerHTML = rows.map((s) =>
-      `<tr><td><span class="dot" style="background:${PLANE_COLORS[s.plane]}"></span>${s.name}</td>` +
+      `<tr><td><span class="dot" style="background:${s.color}"></span>${s.name}</td>` +
       `<td>${s.az.toFixed(1)}</td><td>${s.el.toFixed(1)}</td></tr>`).join("");
   }
 

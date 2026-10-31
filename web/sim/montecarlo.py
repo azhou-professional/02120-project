@@ -21,6 +21,7 @@ from .dop import KEYS, dop_batch
 MAX_TRIALS = 1_000_000
 SUB_CHUNK = 20_000      # trials per vectorized batch (bounds memory)
 HIST_BINS = 40
+DEFAULT_WINDOW_S = 365 * 86400.0    # random times are drawn from [0, window): one year by default
 
 
 # ---- sampling ------------------------------------------------------------------
@@ -37,9 +38,9 @@ def sample_locations(rng, n):
     return lat, lon
 
 
-def sample_times(rng, n, period):
-    """n random times uniform on [0, period) seconds."""
-    return rng.uniform(0.0, period, n)
+def sample_times(rng, n, window):
+    """n random times uniform on [0, window) seconds."""
+    return rng.uniform(0.0, window, n)
 
 
 # ---- analytic coverage (used as a check) -----------------------------------------
@@ -89,21 +90,24 @@ def run_trials(elements, lat, lon, t, mask_deg):
 # ---- a whole run -------------------------------------------------------------------
 
 class MonteCarlo:
-    def __init__(self, n, seed=None, pdop_max=6.0, mask_deg=0.0, elements=None):
+    def __init__(self, n, seed=None, pdop_max=6.0, mask_deg=0.0, elements=None, window_s=DEFAULT_WINDOW_S):
         if elements is None:
             elements = presets.gps()
+        elements = np.asarray(elements, dtype=float).reshape(-1, 6)
+        if len(elements) == 0:
+            raise ValueError("there are no satellites to simulate")
         if seed is None:
             seed = int(np.random.SeedSequence().entropy % 2**32)
         self.elements, self.seed, self.n = elements, int(seed), int(n)
-        self.pdop_max, self.mask_deg = float(pdop_max), float(mask_deg)
+        self.pdop_max, self.mask_deg, self.window_s = float(pdop_max), float(mask_deg), float(window_s)
 
         rng = np.random.default_rng(self.seed)
         self.lat, self.lon = sample_locations(rng, self.n)
-        # The satellite geometry repeats every orbital period. Earth rotation does not
-        # matter here: longitude is drawn uniformly and independently of t, so the receiver's
-        # inertial longitude (lon + omega*t) is uniform for every t.
-        # (Assumes one common orbit radius; revisit when constellations are mixed.)
-        self.t = sample_times(rng, self.n, constellation.period(elements[0, constellation.A]))
+        # Random times are drawn from [0, window). Earth rotation does not matter here:
+        # longitude is drawn uniformly and independently of t, so the receiver's inertial
+        # longitude (lon + omega*t) is uniform for every t. The window should span many
+        # repeats of the satellites' relative geometry (see constellation.approx_common_period).
+        self.t = sample_times(rng, self.n, self.window_s)
 
         self.n_visible = np.zeros(self.n, dtype=int)
         self.dop = {k: np.full(self.n, np.nan) for k in KEYS}
@@ -143,6 +147,7 @@ class MonteCarlo:
         out = {
             "n_done": d, "n": self.n, "seed": self.seed,
             "pdop_max": self.pdop_max, "mask_deg": self.mask_deg,
+            "window_days": self.window_s / 86400.0, "n_satellites": len(self.elements),
             "nsat": {
                 "mean": float(nv.mean()),
                 "std": float(nv.std(ddof=1)) if d > 1 else None,
@@ -180,13 +185,15 @@ def _nan_to_none(arr):
     return [None if math.isnan(v) else v for v in arr.tolist()]
 
 
-def mc_start(n, seed, pdop_max, mask_deg=0.0):
-    """Start a new run. seed None (or negative, as sent from JavaScript) means a random seed."""
+def mc_start(n, seed, pdop_max, mask_deg=0.0, elements_json=None, window_s=DEFAULT_WINDOW_S):
+    """Start a new run on the satellites in elements_json (a list of 6-number rows; default GPS).
+    seed None (or negative, as sent from JavaScript) means a random seed."""
     global _run
     n = max(1, min(int(n), MAX_TRIALS))
     use_seed = None if seed is None or seed < 0 else int(seed)
-    _run = MonteCarlo(n, seed=use_seed, pdop_max=pdop_max, mask_deg=mask_deg)
-    return json.dumps({"n": _run.n, "seed": _run.seed})
+    elements = None if elements_json is None else json.loads(elements_json)
+    _run = MonteCarlo(n, seed=use_seed, pdop_max=pdop_max, mask_deg=mask_deg, elements=elements, window_s=window_s)
+    return json.dumps({"n": _run.n, "seed": _run.seed, "window_days": _run.window_s / 86400.0})
 
 
 def mc_advance(k, want_points=False):

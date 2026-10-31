@@ -255,11 +255,11 @@ def test_common_period_of_pairs_is_shorter():
 # ---- what the page draws ---------------------------------------------------------------------------
 
 def test_orbit_rings_for_the_page():
-    import json
     from sim import api
-    rings = json.loads(api.orbit_rings(60))
-    assert len(rings) == 6 and all(len(r) == 60 for r in rings)          # GPS: one ring per plane
-    assert np.allclose(np.linalg.norm(np.array(rings), axis=2), c.A_GPS)   # circles of GPS radius
+    paths, ring_of = api.orbit_paths(presets.gps(), 60)
+    assert len(paths) == 6 and all(len(r) == 60 for r in paths)             # GPS: one ring per plane
+    assert np.allclose(np.linalg.norm(np.array(paths), axis=2), c.A_GPS)    # circles of GPS radius
+    assert ring_of == [i // 4 for i in range(24)]                            # four satellites per plane
 
 
 # ---- coverage of an elliptical orbit (Monte Carlo against the numerical orbit average) ------------
@@ -271,7 +271,8 @@ def test_expected_mean_visible_reduces_to_closed_form_for_a_circle():
 
 def test_ellipse_monte_carlo_matches_orbit_averaged_probability():
     n, mask = 200_000, 5.0
-    run = mc.MonteCarlo(n, seed=9, mask_deg=mask, elements=ORBIT)       # times cover whole periods of this orbit
+    # times drawn over exactly one period of this orbit, so the orbit average is the exact expectation
+    run = mc.MonteCarlo(n, seed=9, mask_deg=mask, elements=ORBIT, window_s=float(c.period(20000.0)))
     run.advance(n)
     p = mc.expected_mean_visible(ORBIT, mask)
     frac = float(np.mean(run.n_visible == 1))

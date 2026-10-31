@@ -1,7 +1,7 @@
 // Polar sky plot: zenith at the centre, horizon at the outer circle, north at the top,
 // azimuth increasing clockwise (east to the right).
 
-export const PLANE_COLORS = ["#4e79a7", "#f28e2b", "#e15759", "#76b7b2", "#59a14f", "#edc948"];
+const MAX_LABELS = 14;      // names are drawn next to the dots only up to this many satellites in view
 
 export function drawSkyplot(canvas, snap) {
   const dpr = window.devicePixelRatio || 1;
@@ -38,11 +38,12 @@ export function drawSkyplot(canvas, snap) {
   ctx.setLineDash([]);
 
   ctx.textAlign = "left";
-  snap.names.forEach((name, i) => {
+  const showLabels = snap.visible.filter(Boolean).length <= MAX_LABELS;   // with more, the names overlap
+  snap.labels.forEach((name, i) => {
     if (!snap.visible[i]) return;
     const [x, y] = point(snap.az[i], snap.el[i]);
-    ctx.fillStyle = PLANE_COLORS[snap.planes[i]];
+    ctx.fillStyle = snap.colors[i];
     ctx.beginPath(); ctx.arc(x, y, 6, 0, 2 * Math.PI); ctx.fill();
-    ctx.fillStyle = "#dfe6ee"; ctx.fillText(name, x + 9, y);
+    if (showLabels) { ctx.fillStyle = "#dfe6ee"; ctx.fillText(name, x + 9, y); }
   });
 }

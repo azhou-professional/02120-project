@@ -16,6 +16,7 @@ INC_GPS = 55.0         # nominal GPS inclination, degrees
 
 MAX_ECC = 0.9                  # largest eccentricity accepted
 MIN_PERIGEE_ALT_KM = 160.0     # lowest perigee accepted (below this, drag would pull it down fast)
+MAX_APOGEE_RADIUS_KM = 500000.0  # farthest apogee accepted (beyond the Moon's orbit, two-body motion is not meaningful)
 LCM_TOL = 0.03                 # cycles: how close to a whole number of orbits counts as "repeated"
 LCM_MAX_DAYS = 3650            # longest common period searched (10 years)
 
@@ -78,6 +79,8 @@ def validate_orbit(a, ecc=0.0, inc_deg=0.0):
     perigee_alt = a * (1.0 - ecc) - geometry.R_EARTH
     if perigee_alt < MIN_PERIGEE_ALT_KM:
         raise ValueError(f"perigee altitude {perigee_alt:.0f} km is below the minimum {MIN_PERIGEE_ALT_KM:.0f} km")
+    if a * (1.0 + ecc) > MAX_APOGEE_RADIUS_KM:
+        raise ValueError(f"apogee radius {a * (1.0 + ecc):.0f} km is beyond the maximum {MAX_APOGEE_RADIUS_KM:.0f} km")
 
 
 # ---- Kepler's equation -------------------------------------------------------------------
@@ -103,6 +106,8 @@ def solve_kepler(M, ecc, tol=1e-13, max_iter=60):
     ecc = np.asarray(ecc, dtype=float)
     M = (M + np.pi) % (2.0 * np.pi) - np.pi
     E = M + 0.85 * ecc * np.sign(np.sin(M))
+    if E.size == 0:                       # no satellites: nothing to solve
+        return E
     for _ in range(max_iter):
         dE = (E - ecc * np.sin(E) - M) / (1.0 - ecc * np.cos(E))
         E = E - dE

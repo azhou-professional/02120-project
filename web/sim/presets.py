@@ -54,11 +54,13 @@ def beidou_igso_geo():
     return np.vstack([igso, geo])
 
 
-# key -> label, short name for lists, satellite names, element builder
+# key -> label, short prefix for satellite labels, system (one colour per system), satellite
+# names, element builder. Labels read "<short>-<name>", e.g. GPS-A1, GAL-C8, BDS-I1, BDS-G3.
 PRESETS = {
-    "gps": {"label": "GPS", "short": "GPS", "build": gps, "names": lambda: c.names(24, 6)},
-    "galileo": {"label": "Galileo", "short": "GAL", "build": galileo, "names": lambda: c.names(24, 3)},
-    "beidou_meo": {"label": "BeiDou MEO", "short": "BDS-M", "build": beidou_meo, "names": lambda: c.names(24, 3)},
-    "beidou_igso_geo": {"label": "BeiDou IGSO + GEO", "short": "BDS-I/G", "build": beidou_igso_geo,
+    "gps": {"label": "GPS", "short": "GPS", "system": "gps", "build": gps, "names": lambda: c.names(24, 6)},
+    "galileo": {"label": "Galileo", "short": "GAL", "system": "galileo", "build": galileo, "names": lambda: c.names(24, 3)},
+    "beidou_meo": {"label": "BeiDou MEO", "short": "BDS", "system": "beidou", "build": beidou_meo,
+                   "names": lambda: c.names(24, 3)},
+    "beidou_igso_geo": {"label": "BeiDou IGSO + GEO", "short": "BDS", "system": "beidou", "build": beidou_igso_geo,
                         "names": lambda: ["I1", "I2", "I3", "G1", "G2", "G3"]},
 }
