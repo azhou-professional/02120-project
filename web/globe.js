@@ -4,6 +4,7 @@ import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { trialColor, rgb01, FADE } from "./trialcolors.js";
 import { buildEarthGeometry } from "./earth.js";
 import { satelliteGeometries } from "./satmodels.js";
+import { buildMoonGeometry } from "./moon.js";
 
 const R_EARTH = 6378.137;      // km; scene units are Earth radii
 const K = 1 / R_EARTH;
@@ -17,9 +18,10 @@ const EARTH_CENTRE = new THREE.Vector3(0, 0, 0);
 // onHover(i, x, y): satellite i (or -1 for none) is under the mouse, at (x, y) pixels inside the container.
 // land: the land/ocean grid from earth.js (or null for a plain sphere).
 // onSatClick(i): satellite i was clicked (to switch it off or on).
-export function createGlobe(container, onPick, onHover, land, onSatClick) {
+// moonAlbedo: the Moon's brightness grid from moon.js (or null for a plain grey Moon).
+export function createGlobe(container, onPick, onHover, land, onSatClick, moonAlbedo) {
   const scene = new THREE.Scene();
-  const camera = new THREE.PerspectiveCamera(45, 1, 0.01, 100);
+  const camera = new THREE.PerspectiveCamera(45, 1, 0.01, 1000);    // far enough for the Moon (~60) and the Sun's sphere (SUN_DIST)
   camera.position.set(6, 4, 9);
 
   const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -31,10 +33,17 @@ export function createGlobe(container, onPick, onHover, land, onSatClick) {
   controls.minDistance = 1.6;
   controls.maxDistance = 20;
 
-  scene.add(new THREE.AmbientLight(0xffffff, 0.8));
-  const sun = new THREE.DirectionalLight(0xffffff, 1.2);
-  sun.position.set(5, 3, 4);
-  scene.add(sun);
+  // Two lighting modes (Settings tab): a fixed light from the upper right with strong ambient light, so
+  // every side is easy to see; or light from the real Sun, which gives the Earth's day and night and the
+  // Moon's phase, with a dim ambient light so the night side can still be read.
+  const ambient = new THREE.AmbientLight(0xffffff, 0.8);
+  scene.add(ambient);
+  const light = new THREE.DirectionalLight(0xffffff, 1.2);    // shines from light.position toward the origin
+  scene.add(light);
+  const FIXED_LIGHT = new THREE.Vector3(5, 3, 4);
+  light.position.copy(FIXED_LIGHT);
+  const sky = { showSun: true, showMoon: true, sunlight: true };
+  let sunDir = new THREE.Vector3(1, 0, 0);                    // scene axes; set by update()
 
   // Everything fixed to the ground (the Earth, its graticule, Monte-Carlo dots) lives in
   // earthGroup, which is turned each update by the Earth's rotation angle from Python.
@@ -56,6 +65,43 @@ export function createGlobe(container, onPick, onHover, land, onSatClick) {
     new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, 1, 0), new THREE.Vector3(0, 1.35, 0)]),
     new THREE.LineBasicMaterial({ color: 0xffffff }));
   earthGroup.add(pole);
+
+  // ---- the Moon and the Sun (positions from Python, ephemeris.py) --------------------------------
+  // The Moon is drawn at its true distance (about 60 Earth radii) and true size. The Sun is much too far to
+  // draw at its true distance (23,500 Earth radii), so it is a disc in its true direction on a sphere of
+  // radius SUN_DIST around the Earth, sized to its true angular radius (0.267 deg, solar radius / 1 AU),
+  // with a soft glow around it.
+  const R_MOON = 1737.4 * K;                       // same radius as ephemeris.R_MOON_KM
+  const SUN_DIST = 600, SUN_ANGULAR_RADIUS_DEG = 0.2666;
+  const moon = new THREE.Mesh(buildMoonGeometry(moonAlbedo),
+    new THREE.MeshLambertMaterial({ vertexColors: true }));
+  moon.scale.setScalar(R_MOON);
+  scene.add(moon);
+
+  const sunGroup = new THREE.Group();
+  const sunDisc = new THREE.Mesh(new THREE.SphereGeometry(SUN_DIST * Math.tan(SUN_ANGULAR_RADIUS_DEG * Math.PI / 180), 32, 16),
+    new THREE.MeshBasicMaterial({ color: 0xfff8ec }));
+  const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture(), color: 0xffe8b8, transparent: true,
+                                                            blending: THREE.AdditiveBlending, depthWrite: false }));
+  glow.scale.setScalar(sunDisc.geometry.parameters.radius * 14);
+  sunGroup.add(sunDisc, glow);
+  scene.add(sunGroup);
+
+  function applySky() {
+    sunGroup.visible = sky.showSun;
+    moon.visible = sky.showMoon;
+    if (sky.sunlight) {
+      light.position.copy(sunDir).multiplyScalar(10);
+      light.intensity = 2.4;
+      ambient.intensity = 0.18;
+    } else {
+      light.position.copy(FIXED_LIGHT);
+      light.intensity = 1.2;
+      ambient.intensity = 0.8;
+    }
+  }
+  /** Settings tab: { showSun, showMoon, sunlight } (any of them). */
+  function setSky(options) { Object.assign(sky, options); applySky(); }
 
   // Receiver marker
   const receiver = new THREE.Mesh(
@@ -281,6 +327,12 @@ export function createGlobe(container, onPick, onHover, land, onSatClick) {
   }
 
   function update(snap) {
+    sunDir = dirToScene(snap.sun_dir);
+    sunGroup.position.copy(sunDir).multiplyScalar(SUN_DIST);
+    moon.position.copy(toScene(snap.moon));
+    moon.up.copy(dirToScene(snap.moon_pole));     // the Moon's north (its axis is within 1.5 deg of the ecliptic pole) ...
+    moon.lookAt(EARTH_CENTRE);                    // ... and its near side (+z) facing the Earth
+    applySky();
     if (snap.sat_positions.length !== sats.length) return;     // the constellation just changed; the next snapshot will match
     enabled = snap.enabled;
     visible = snap.visible;
@@ -439,12 +491,32 @@ export function createGlobe(container, onPick, onHover, land, onSatClick) {
     return { x: (ndc.x * 0.5 + 0.5) * container.clientWidth, y: (-ndc.y * 0.5 + 0.5) * container.clientHeight };
   }
 
-  return { update, setConstellation, spawnTrials, clearTrials, screenOf, blockedLines: () => blockedCount,
+  return { update, setConstellation, setSky, spawnTrials,
+           // for tests: where the Sun and the Moon are drawn (scene axes) and where the light comes from
+           skyState: () => ({ sun: sunGroup.position.toArray(), moon: moon.position.toArray(), light: light.position.toArray(),
+                              sunVisible: sunGroup.visible, moonVisible: moon.visible }), clearTrials, screenOf, blockedLines: () => blockedCount,
            setPreview, clearPreview, previewCount: () => previewObjects.length,
            setGroundMap, clearGroundMap, groundMapCells: () => (groundMap ? groundMap.geometry.attributes.position.count / 6 : 0),
            satColor: (i) => `#${sats[i].material.color.getHexString()}`,
            // for tests: the model's +z (antenna) and +y (wing) axes, and its position, in scene axes
            satAxes: (i) => { const e = sats[i].matrixWorld.elements; return { y: [e[4], e[5], e[6]], z: [e[8], e[9], e[10]], p: sats[i].position.toArray() }; } };
+}
+
+// The Sun's glow: a white spot fading to transparent (a radial gradient drawn on a small canvas).
+function glowTexture() {
+  const size = 128, c = document.createElement("canvas");
+  c.width = c.height = size;
+  const ctx = c.getContext("2d");
+  const g = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
+  g.addColorStop(0, "rgba(255,255,255,1)");
+  g.addColorStop(0.1, "rgba(255,255,255,0.6)");
+  g.addColorStop(0.3, "rgba(255,255,255,0.12)");
+  g.addColorStop(1, "rgba(255,255,255,0)");
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, size, size);
+  const texture = new THREE.CanvasTexture(c);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  return texture;
 }
 
 function addGraticule(scene) {

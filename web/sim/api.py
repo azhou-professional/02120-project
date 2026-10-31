@@ -9,7 +9,7 @@ import math
 
 import numpy as np
 
-from . import constellation, geometry, presets
+from . import constellation, ephemeris, geometry, presets
 from .dop import dop
 
 DEFAULT_MASK_DEG = 0.0       # satellites below this elevation are not used (0 = geometric horizon)
@@ -69,6 +69,10 @@ def snapshot(lat_deg, lon_deg, t_seconds, mask_deg=DEFAULT_MASK_DEG):
         "blocked": blocked.tolist(),
         "n_visible": int(visible.sum()),
         "dop": {k: _clean(v) for k, v in values.items()},
+        # for drawing only (ephemeris.py): direction to the Sun, the Moon's position (km), the Moon's 'up'
+        "sun_dir": ephemeris.sun_direction(t_seconds).tolist(),
+        "moon": ephemeris.moon_position(t_seconds).tolist(),
+        "moon_pole": ephemeris.ecliptic_pole(t_seconds).tolist(),
     })
 
 

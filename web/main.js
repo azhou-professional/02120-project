@@ -7,12 +7,33 @@ import { initMonteCarlo } from "./mc.js";
 import { initConstellation } from "./constellation.js";
 import { initCompare } from "./compare.js";
 import { loadLandMask } from "./earth.js";
+import { loadMoonAlbedo } from "./moon.js";
 
 const $ = (id) => document.getElementById(id);
 const DAY = 86400;
 
+// ---- loading screen: covers the page until the globe is ready (Pyodide takes several seconds) ----
+const LOAD_STEPS = 5;     // three in loadSim (pyloader.js), then the maps, then building the globe
+let loadStep = 0;
+function loadingStep(text) {
+  loadStep++;
+  $("loader-fill").style.width = `${(100 * (loadStep - 1)) / LOAD_STEPS}%`;   // the bar shows the steps already finished
+  $("loader-step").textContent = `${text} (${loadStep} of ${LOAD_STEPS})…`;
+}
+function loadingDone() {
+  $("loader-fill").style.width = "100%";
+  $("loader").classList.add("done");                                    // fades out (CSS), then is removed
+  setTimeout(() => $("loader").remove(), 600);
+}
+function loadingFailed(e) {
+  const step = $("loader-step");
+  if (!step) return;                                                    // the screen is already gone
+  step.textContent = `Could not start: ${e.message}`;
+  step.classList.add("err");
+}
+
 async function loadPython() {
-  const pyodide = await loadSim(loadPyodide);   // loadPyodide comes from the <script> tag in index.html
+  const pyodide = await loadSim(loadPyodide, loadingStep);   // loadPyodide comes from the <script> tag in index.html
   return pyodide.pyimport("sim.api");
 }
 
@@ -53,7 +74,7 @@ function satelliteInfoHtml(s, i) {
          `<div style="color:var(--muted);margin-top:4px">Click to switch ${s.enabled[i] ? "off" : "on"}</div>`;
 }
 
-const TABS = ["live", "mc", "cs", "tr", "cmp"];
+const TABS = ["live", "mc", "cs", "tr", "cmp", "set"];
 
 // Side view of the cone-shaped valley: the receiver at the bottom, walls at the blocking angle, the
 // hidden part of the sky shaded. Purely a picture; the numbers come from Python.
@@ -87,8 +108,11 @@ function setupTabs(onShow) {
 
 async function main() {
   const api = await loadPython();
+  loadingStep("Loading the Earth and Moon maps");
   const land = await loadLandMask("data/land_mask.json").catch((e) => { console.warn("no land grid:", e); return null; });
+  const moonAlbedo = await loadMoonAlbedo("data/moon_albedo.json").catch((e) => { console.warn("no Moon grid:", e); return null; });
   $("status").textContent = "Ready.";
+  loadingStep("Building the globe");
 
   let t = 0, playing = false, dirty = true, last = performance.now();
   let lastSnap = null;
@@ -154,7 +178,14 @@ async function main() {
     },
     (i, x, y) => { Object.assign(hover, { i, x, y }); renderTip(); },
     land,
-    (i) => cons.toggleSat(i));
+    (i) => cons.toggleSat(i),
+    moonAlbedo);
+
+  // ---- settings: the Sun, the Moon and where the light comes from (drawing only) ----------------------
+  const applySky = () => globe.setSky({ showSun: $("set-sun").checked, showMoon: $("set-moon").checked,
+                                        sunlight: $("set-sunlight").checked });
+  for (const id of ["set-sun", "set-moon", "set-sunlight"]) $(id).addEventListener("change", applySky);
+  applySky();
 
   cons = initConstellation(api, { globe, getTime: () => t, onChange: () => { dirty = true; if (mc) mc.refreshWindow(); } });
   cons.addPreset("gps");
@@ -265,6 +296,7 @@ async function main() {
     if (dirty) { dirty = false; refresh(); }
   }
   requestAnimationFrame(frame);
+  loadingDone();
 }
 
-main().catch((e) => { $("status").textContent = `Error: ${e.message}`; console.error(e); });
+main().catch((e) => { $("status").textContent = `Error: ${e.message}`; loadingFailed(e); console.error(e); });

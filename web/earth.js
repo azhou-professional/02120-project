@@ -21,8 +21,8 @@ export async function loadLandMask(url) {
 
 const norm = (v) => { const l = Math.hypot(...v); return v.map((x) => x / l); };
 
-/** Unit icosphere: 20 * 4^level triangles (level 4 -> 5,120). */
-function icosphere(level) {
+/** Unit icosphere: 20 * 4^level triangles (level 4 -> 5,120). Also used for the Moon (moon.js). */
+export function icosphere(level) {
   const t = (1 + Math.sqrt(5)) / 2;
   const verts = [[-1, t, 0], [1, t, 0], [-1, -t, 0], [1, -t, 0], [0, -1, t], [0, 1, t],
                  [0, -1, -t], [0, 1, -t], [t, 0, -1], [t, 0, 1], [-t, 0, -1], [-t, 0, 1]].map(norm);
@@ -52,7 +52,7 @@ const SNOW = new THREE.Color("#eef3f6"), DESERT = new THREE.Color("#c9b37c"), GR
 
 // repeatable "random" number in [-1, 1) from the triangle number, so each triangle gets a slightly
 // different shade (this is what makes the faceted look) and the picture is the same every time
-const jitter = (i) => { const s = Math.sin(i * 12.9898) * 43758.5453; return (s - Math.floor(s)) * 2 - 1; };
+export const jitter = (i) => { const s = Math.sin(i * 12.9898) * 43758.5453; return (s - Math.floor(s)) * 2 - 1; };
 
 function faceColor(land, lat, i) {
   const a = Math.abs(lat);
