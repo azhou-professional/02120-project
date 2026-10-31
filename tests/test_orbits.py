@@ -277,3 +277,27 @@ def test_ellipse_monte_carlo_matches_orbit_averaged_probability():
     p = mc.expected_mean_visible(ORBIT, mask)
     frac = float(np.mean(run.n_visible == 1))
     assert abs(frac - p) < 4 * math.sqrt(p * (1 - p) / n), (frac, p)
+
+
+# ---- orbit normals (used to orient the satellite models) ----------------------------------------------
+
+def test_orbit_normal_is_the_direction_of_r_cross_v():
+    """The normal must be a unit vector perpendicular to the position at all times, and point along the
+    angular momentum r x v (velocity from finite differences, independent of the formula)."""
+    el = np.vstack([presets.gps(), presets.galileo(), presets.beidou_igso_geo(), ORBIT])
+    n = c.orbit_normal(el)
+    assert np.allclose(np.linalg.norm(n, axis=1), 1.0)
+    for t in (0.0, 5000.0, 40000.0):
+        r = c.positions(el, t)
+        assert np.allclose(np.sum(r * n, axis=1), 0.0, atol=1e-6)
+        h = np.cross(r, finite_difference_velocity(el, t))
+        assert np.allclose(h / np.linalg.norm(h, axis=1, keepdims=True), n, atol=1e-6)
+
+
+def test_set_constellation_returns_one_normal_per_satellite():
+    import json
+    from sim import api
+    el = presets.galileo()
+    info = json.loads(api.set_constellation(json.dumps(el.tolist()), json.dumps([True] * len(el))))
+    assert np.allclose(info["normals"], c.orbit_normal(el))
+    api.set_constellation(json.dumps(presets.gps().tolist()), json.dumps([True] * 24))

@@ -155,7 +155,7 @@ async function main() {
     land,
     (i) => cons.toggleSat(i));
 
-  cons = initConstellation(api, { globe, onChange: () => { dirty = true; if (mc) mc.refreshWindow(); } });
+  cons = initConstellation(api, { globe, getTime: () => t, onChange: () => { dirty = true; if (mc) mc.refreshWindow(); } });
   cons.addPreset("gps");
   window.app = { api, globe, cons };       // for poking around in the browser console, and for browser tests
 
