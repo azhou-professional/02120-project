@@ -1,0 +1,28 @@
+Reference papers for the GPS DOP project
+=========================================
+The PDFs are kept locally in paper/ (git-ignored). Link status was checked on 2026-10-31.
+
+
+1. Langley, R. B. (1999). "Dilution of Precision." GPS World, May 1999 (starts p. 52).
+   Local file: paper/gpsworld.may99.pdf
+   Original:   http://gauss.gge.unb.ca/papers.pdf/gpsworld.may99.pdf
+               (the server refused the connection when checked)
+   Archived:   https://web.archive.org/web/20111004205627/http://gauss.gge.unb.ca/papers.pdf/gpsworld.may99.pdf
+               (reported by Wikipedia's reference list; could not be opened to check)
+
+
+2. FAA William J. Hughes Technical Center, NSTB/WAAS T&E Team (1999).
+   "Global Positioning System (GPS) Standard Positioning Service (SPS) Performance
+   Analysis Report," Report #26, 30 July 1999 (reporting period 1 April - 30 June 1999).
+   Submitted to the FAA GPS Product Team.
+   Local file: paper/PAN26_0499.pdf
+   Link:       https://www.nstb.tc.faa.gov/REPORTS/PAN26_0499.pdf
+               (verified: byte-identical to the local copy)
+
+
+3. Ashby, N. (2003). "Relativity in the Global Positioning System."
+   Living Reviews in Relativity 6, 1. Published 28 January 2003.
+   Local file: paper/lrr-2003-1.pdf
+   DOI:        https://doi.org/10.12942/lrr-2003-1   (redirects to link.springer.com/10.12942/lrr-2003-1)
+   Printed on the paper: http://www.livingreviews.org/lrr-2003-1
+   Note: the journal later published a revised version (2007); the local PDF is the 2003 original.
