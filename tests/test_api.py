@@ -161,7 +161,7 @@ def test_geostationary_form_ignores_the_other_fields():
     r = form(geo=True, lon=-75.0, alt="junk", inc=None)
     assert r["ok"]
     el = np.array([r["elements"]])
-    assert math.isclose(el[0, c.A], c.geostationary_radius()) and el[0, c.INC] == 0 and el[0, c.M0] == -75.0
+    assert math.isclose(el[0, c.A], c.geostationary_radius()) and el[0, c.INC] == 0
     lat, lon = g.lat_lon(c.positions(el, 12345.0), 12345.0)
     assert math.isclose(lat[0], 0.0, abs_tol=1e-9) and math.isclose(lon[0], -75.0, abs_tol=1e-9)
 

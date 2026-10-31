@@ -65,9 +65,9 @@ def geostationary_radius():
 
 
 def geostationary(lon_deg):
-    """One geostationary satellite above longitude lon_deg (east). At t = 0 the Earth-fixed
-    longitude equals the inertial angle, so the phase at t = 0 is simply the longitude."""
-    return make_elements(geostationary_radius(), 0.0, 0.0, 0.0, 0.0, lon_deg)
+    """One geostationary satellite above longitude lon_deg (east). At t = 0 the inertial angle of
+    that longitude is lon + (the Earth's angle at the epoch), so that is the phase at t = 0."""
+    return make_elements(geostationary_radius(), 0.0, 0.0, 0.0, 0.0, (lon_deg + geometry.EARTH_ANGLE_AT_EPOCH) % 360.0)
 
 
 def validate_orbit(a, ecc=0.0, inc_deg=0.0):

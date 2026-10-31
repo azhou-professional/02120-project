@@ -17,11 +17,6 @@ async function loadPython() {
 
 const fmt = (x, d = 2) => (x === null ? "–" : x.toFixed(d));
 
-function hms(s) {
-  const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = Math.floor(s % 60);
-  return [h, m, sec].map((v) => String(v).padStart(2, "0")).join(":");
-}
-
 const nf = (x, d) => x.toLocaleString(undefined, { minimumFractionDigits: d, maximumFractionDigits: d });
 const hmsText = (s) => {
   const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = Math.floor(s % 60);
@@ -82,12 +77,30 @@ async function main() {
   let cons, mc;                                   // the constellation and the Monte Carlo (set up once the globe exists)
   let featured = null;                            // during a Monte Carlo run: the trial {lat, lon, t} the live view shows
 
+  // ---- time -------------------------------------------------------------------------------------------
+  // t is seconds after the epoch, 2026-01-01 00:00:00 UTC (from Python). The Earth's angle at any t is the
+  // Greenwich sidereal time of that date, so the date picker and slider set a real date and time (UTC).
+  const epochMs = Date.parse(JSON.parse(api.epoch_info()).epoch_utc);
+  const SLIDER_MAX = 1439;                                    // the slider counts minutes: 0 .. 23:59
+  const HOLD_START_RATE = 3600, HOLD_MAX_RATE = 30 * DAY;     // holding the slider at an end: 1 h/s, doubling every second, up to 30 days/s
+  const timeOfDay = (s) => ((s % DAY) + DAY) % DAY;           // seconds since UTC midnight (also right for t < 0)
+  const utc = (s) => new Date(epochMs + s * 1000);
+  const dateText = (s) => utc(s).toISOString().slice(0, 10);
+  const timeText = (s) => `${dateText(s)} ${utc(s).toISOString().slice(11, 19)} UTC`;
+  let pressingSlider = false, hold = 0, holdStart = 0;       // hold = +1 / -1 while the slider is held at its right / left end
+
+  function showTime() {
+    $("tlabel").textContent = timeText(t);
+    if (hold === 0) $("time").value = Math.floor(timeOfDay(t) / 60);    // while held at an end, the thumb stays there
+    if (document.activeElement !== $("date")) $("date").value = dateText(t);
+  }
+
   // While a Monte Carlo run is going, the live view belongs to the run: the time, the receiver and the
   // constellation cannot be changed, and about once a second the view jumps to one of the run's trials.
   function setRunLocked(on) {
     featured = null;
     if (on) { playing = false; $("play").textContent = "Play"; }
-    for (const id of ["lat", "lon", "time", "play", "speed"]) $(id).disabled = on;
+    for (const id of ["lat", "lon", "date", "time", "play", "speed"]) $(id).disabled = on;
     $("live-lock-note").hidden = !on;
     $("live-lock-note").textContent = "Monte Carlo run in progress: the time and receiver follow its trials.";
     cons.setLocked(on);
@@ -97,9 +110,8 @@ async function main() {
   function showFeatured(trial) {
     featured = trial;
     t = trial.t;
-    $("time").value = Math.floor((t % DAY) / 60);
     $("live-lock-note").textContent = `Monte Carlo trial ${trial.index.toLocaleString()}: ` +
-      `latitude ${trial.lat.toFixed(1)}°, longitude ${trial.lon.toFixed(1)}°, day ${Math.floor(t / DAY)}.`;
+      `latitude ${trial.lat.toFixed(1)}°, longitude ${trial.lon.toFixed(1)}°, ${timeText(t)}.`;
     dirty = true;
   }
 
@@ -148,7 +160,7 @@ async function main() {
     renderTip();
     drawSkyplot($("sky"), snap);
 
-    $("tlabel").textContent = `Day ${Math.floor(t / DAY)}  ${hms(t % DAY)}`;
+    showTime();
     $("mask").textContent = snap.mask_deg;
     $("n").textContent = snap.n_visible;
     for (const k of ["gdop", "pdop", "hdop", "vdop", "tdop"]) $(k).textContent = fmt(snap.dop[k]);
@@ -163,9 +175,26 @@ async function main() {
   }
 
   for (const id of ["lat", "lon"]) $(id).addEventListener("input", () => { dirty = true; });
-  // The slider sets the time of day within the current day; Play runs on past midnight (the Earth
-  // does not rotate 360 degrees in exactly 24 h, so wrapping would make it jump).
-  $("time").addEventListener("input", () => { t = Math.floor(t / DAY) * DAY + parseFloat($("time").value) * 60; dirty = true; });
+  // The slider sets the time of day (UTC) within the current date; Play runs on past midnight. Holding
+  // the slider at either end keeps the time going into the next (or previous) days, faster the longer
+  // it is held (see frame()). The date picker changes the date and keeps the time of day.
+  $("time").addEventListener("pointerdown", () => { pressingSlider = true; });
+  const releaseSlider = () => { if (pressingSlider) { pressingSlider = false; hold = 0; dirty = true; } };
+  window.addEventListener("pointerup", releaseSlider);
+  window.addEventListener("pointercancel", releaseSlider);
+  $("time").addEventListener("input", () => {
+    const v = parseInt($("time").value, 10);
+    if (hold !== 0 && (v >= SLIDER_MAX || v <= 0)) return;     // already running on at an end: ignore small wiggles there
+    t = t - timeOfDay(t) + v * 60;
+    hold = 0;
+    dirty = true;
+  });
+  $("date").addEventListener("change", () => {
+    const ms = Date.parse(`${$("date").value}T00:00:00Z`);
+    if (!Number.isFinite(ms)) return;
+    t = (ms - epochMs) / 1000 + timeOfDay(t);
+    dirty = true;
+  });
   $("play").addEventListener("click", () => {
     playing = !playing;
     $("play").textContent = playing ? "Pause" : "Play";
@@ -178,7 +207,16 @@ async function main() {
     last = now;
     if (playing) {
       t += dt * parseFloat($("speed").value);
-      $("time").value = Math.floor((t % DAY) / 60);
+      dirty = true;
+    }
+    if (pressingSlider && hold === 0) {                    // the slider is being held at one of its ends
+      const v = parseInt($("time").value, 10);
+      if (v >= SLIDER_MAX || v <= 0) { hold = v >= SLIDER_MAX ? 1 : -1; holdStart = now; }
+    }
+    if (hold !== 0) {
+      const held = (now - holdStart) / 1000;
+      const rate = Math.min(HOLD_START_RATE * 2 ** held, HOLD_MAX_RATE);    // simulated seconds per real second
+      t += hold * rate * dt;
       dirty = true;
     }
     if (dirty) { dirty = false; refresh(); }

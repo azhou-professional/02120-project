@@ -64,12 +64,13 @@ export function initMonteCarlo(globe, { getElements, api, onRunState, onFeatured
     }
   }
 
-  // Every n-th trial (n = trials per second, so about one a second) is the "featured" trial: the live
-  // view (satellites, Earth angle, receiver, sky plot, timeline) jumps to that trial's place and time.
+  // Every n-th trial is the "featured" trial: the live view (satellites, Earth angle, receiver, sky plot,
+  // timeline) jumps to that trial's place and time. n = (trials per second) / (snaps per second), so with
+  // the default 1 snap/s the view jumps about once a second.
   // The very first trial is featured too, so the view responds as soon as the run starts.
   function featureOneTrial(m) {
     const k = m.points.lat.length, first = m.done - k;
-    const rate = Math.round(getRate());
+    const rate = Math.max(1, Math.round(getRate() / getSnapRate()));
     let j = -1;
     for (let idx = k - 1; idx >= 0; idx--) if ((first + idx + 1) % rate === 0) { j = idx; break; }
     if (j < 0 && first === 0) j = 0;
@@ -191,9 +192,18 @@ export function initMonteCarlo(globe, { getElements, api, onRunState, onFeatured
   $("mc-viz").addEventListener("change", () => {
     const on = $("mc-viz").checked;
     $("mc-rate").disabled = $("mc-rate-num").disabled = !on;
+    $("mc-snap").disabled = $("mc-snap-num").disabled = !on;
     $("mc-legend").hidden = !on;
     if (run) { run.carry = 0; run.lastT = run.lastSpawn = performance.now(); }
   });
+  // Snaps per second: slider position 0..1000 maps logarithmically to 0.1..10 (the middle is 1).
+  const MIN_SNAP = 0.1, MAX_SNAP = 10;
+  const snapFromSlider = (v) => +(MIN_SNAP * (MAX_SNAP / MIN_SNAP) ** (v / 1000)).toFixed(2);
+  const sliderFromSnap = (r) => (1000 * Math.log(r / MIN_SNAP)) / Math.log(MAX_SNAP / MIN_SNAP);
+  const getSnapRate = () => Math.min(MAX_SNAP, Math.max(MIN_SNAP, parseFloat($("mc-snap-num").value) || 1));
+  $("mc-snap").addEventListener("input", () => { $("mc-snap-num").value = snapFromSlider(+$("mc-snap").value); });
+  $("mc-snap-num").addEventListener("input", () => { $("mc-snap").value = sliderFromSnap(getSnapRate()); });
+
   $("mc-preset").addEventListener("change", () => {
     if ($("mc-preset").value) $("mc-n").value = $("mc-preset").value;
     $("mc-preset").value = "";

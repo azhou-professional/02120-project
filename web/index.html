@@ -72,7 +72,7 @@
   .row label.chk { width: auto; color: var(--text); display: flex; gap: 6px; align-items: center; }
   input[type=checkbox] { width: auto; }
   input:disabled, button:disabled { opacity: .5; cursor: not-allowed; }
-  #mc-rate-num { width: 84px; flex: none; }
+  #mc-rate-num, #mc-snap-num { width: 84px; flex: none; }
   #mc-n { width: 110px; flex: none; }
   progress { flex: 1; height: 10px; accent-color: var(--accent); }
   .legend { margin: 6px 0; font-size: 11px; color: var(--muted); }
@@ -118,8 +118,10 @@
     <div class="row"><label for="lon">Lon (°)</label><input id="lon" type="number" step="0.1" min="-180" max="180" value="-79.94"></div>
 
     <h2>Time</h2>
-    <div class="row"><input id="time" type="range" min="0" max="1439" step="1" value="0"></div>
-    <div class="row"><span id="tlabel" style="color:var(--muted)">t = 00:00:00</span></div>
+    <div class="row"><label for="date">Date</label><input id="date" type="date" value="2026-01-01"></div>
+    <div class="row"><input id="time" type="range" min="0" max="1439" step="1" value="0" aria-label="Time of day (UTC)"></div>
+    <div class="row"><span id="tlabel" style="color:var(--muted)">2026-01-01 00:00:00 UTC</span></div>
+    <div class="msg">Hold the slider at either end to keep going into the next or previous days; the longer you hold, the faster.</div>
     <div class="row">
       <button id="play">Play</button>
       <select id="speed">
@@ -173,6 +175,10 @@
       <div class="row"><label for="mc-rate">Trials/s</label>
         <input id="mc-rate" type="range" min="0" max="1000" value="697" disabled>
         <input id="mc-rate-num" type="number" min="1" max="2000" step="1" value="200" disabled></div>
+      <div class="row"><label for="mc-snap">Snaps/s</label>
+        <input id="mc-snap" type="range" min="0" max="1000" value="500" disabled>
+        <input id="mc-snap-num" type="number" min="0.1" max="10" step="0.1" value="1" disabled></div>
+      <div class="msg">How many times per second the Live view jumps to one of the trials (its place and time).</div>
       <div class="legend" id="mc-legend" hidden>
         <div>Flash colour = PDOP</div>
         <div class="bar" id="mc-legend-bar"></div>

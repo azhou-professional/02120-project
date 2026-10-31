@@ -94,6 +94,11 @@ def set_constellation(elements_json, enabled_json):
     return json.dumps({"paths": paths, "ring_of": ring_of})
 
 
+def epoch_info():
+    """The calendar moment of t = 0 (for the page's date picker and timeline)."""
+    return json.dumps({"epoch_utc": geometry.EPOCH_UTC, "earth_angle_at_epoch_deg": geometry.EARTH_ANGLE_AT_EPOCH})
+
+
 def common_period(elements_json):
     """The approximate least common multiple of the orbital periods of these satellites (see
     constellation.approx_common_period). Returns {"found": true, "days", "seconds", "mismatch_deg"},
