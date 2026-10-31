@@ -1,0 +1,240 @@
+// Monte Carlo tab: starts runs in the worker, paces them, and shows the results.
+// All statistics are computed in Python (sim/montecarlo.py); this file only asks and draws.
+import { drawBars, barAt } from "./histogram.js";
+import { legendGradient, cssColor, FADE, UNDEFINED_RGB } from "./trialcolors.js";
+
+const CHUNK = 20000;          // trials per request when not visualizing
+const MAX_VIZ_CHUNK = 4000;   // cap on trials per request when visualizing
+const SUMMARY_MS = 250;       // how often the running summary is refreshed
+const MAX_TRIALS = 1_000_000;
+const MIN_RATE = 1, MAX_RATE = 2000;
+const BAR = "#3987e5", BAR_FEW = UNDEFINED_RGB;  // bars with >= 4 satellites / fewer than 4
+
+const $ = (id) => document.getElementById(id);
+const pct = (x, d = 2) => `${(100 * x).toFixed(d)} %`;
+const f = (x, d = 2) => (x === null || x === undefined ? "–" : x.toFixed(d));
+
+export function initMonteCarlo(globe) {
+  let worker = null, ready = false, runCounter = 0, run = null, lastSummary = null;
+
+  // ---- worker ------------------------------------------------------------------------
+  function ensureWorker() {
+    if (worker) return;
+    $("mc-status").textContent = "Loading Python for Monte Carlo (second Pyodide instance)…";
+    worker = new Worker(new URL("./mc-worker.js", import.meta.url), { type: "module" });
+    worker.onmessage = (e) => handle(e.data);
+    worker.onerror = (e) => { $("mc-status").textContent = `Worker error: ${e.message}`; };
+  }
+
+  function handle(m) {
+    if (m.type === "ready") {
+      ready = true;
+      $("mc-run").disabled = false;
+      $("mc-status").textContent = "Ready.";
+    } else if (m.type === "error") {
+      $("mc-status").textContent = `Error: ${m.message}`;
+      if (run) finish("Stopped by an error");
+    } else if (!run || m.runId !== run.id) {
+      return;                                              // reply for an older run
+    } else if (m.type === "started") {
+      run.started = true;
+      run.lastSpawn = performance.now();
+      $("r-seed").textContent = m.seed;
+      $("mc-status").textContent = "Running…";
+    } else if (m.type === "advanced") {
+      const now = performance.now();
+      run.inflight = false;
+      run.done = m.done;
+      $("mc-progress").value = m.done / run.n;
+      if (m.points) globe.spawnTrials(m.points, Math.max(run.lastSpawn, now - 250), now, run.pdopMax);
+      run.lastSpawn = now;
+      if (m.summary) render(m.summary);
+      if (m.done >= run.n && !run.finished) finish("Done.");
+    } else if (m.type === "summary") {
+      render(m.summary);
+    }
+  }
+
+  // ---- run control ---------------------------------------------------------------------
+  function startRun() {
+    if (!ready) return;
+    const n = Math.min(MAX_TRIALS, Math.max(1, parseInt($("mc-n").value, 10) || 10000));
+    $("mc-n").value = n;
+    const pdopMax = parseFloat($("mc-pdop").value) > 0 ? parseFloat($("mc-pdop").value) : 6;
+    $("mc-pdop").value = pdopMax;
+    const seedText = $("mc-seed").value.trim();
+    const seed = seedText === "" || !(parseInt(seedText, 10) >= 0) ? -1 : parseInt(seedText, 10);   // -1 = random
+
+    const now = performance.now();
+    run = { id: ++runCounter, n, pdopMax, started: false, done: 0, inflight: false, finished: false,
+            carry: 0, lastT: now, lastSpawn: now, lastSummaryAt: 0 };
+    globe.clearTrials();
+    updateLegend();
+    $("mc-progress").value = 0;
+    setRunning(true);
+    $("mc-status").textContent = "Starting…";
+    worker.postMessage({ cmd: "start", runId: run.id, n, seed, pdopMax });
+  }
+
+  function finish(message) {
+    run.finished = true;
+    setRunning(false);
+    $("mc-status").textContent = message;
+  }
+
+  function cancelRun() {
+    finish(`Cancelled after ${run.done.toLocaleString()} trials.`);
+    if (run.started) worker.postMessage({ cmd: "summary", runId: run.id, dopType: $("mc-dop").value });
+  }
+
+  function setRunning(running) {
+    $("mc-run").textContent = running ? "Cancel" : "Run";
+    for (const id of ["mc-n", "mc-preset", "mc-seed", "mc-pdop"]) $(id).disabled = running;
+  }
+
+  // Pacing loop. Without visualization: back-to-back big chunks (as fast as the worker goes).
+  // With visualization: about `rate` trials per second, one request in flight at a time.
+  function tick(now) {
+    requestAnimationFrame(tick);
+    if (!run || !run.started || run.finished || run.inflight) return;
+    const viz = $("mc-viz").checked;
+    let k;
+    if (viz) {
+      run.carry += (getRate() * (now - run.lastT)) / 1000;
+      run.lastT = now;
+      k = Math.min(Math.floor(run.carry), MAX_VIZ_CHUNK);
+      if (k < 1) return;
+      run.carry -= k;
+    } else {
+      k = CHUNK;
+    }
+    k = Math.min(k, run.n - run.done);
+    const last = run.done + k >= run.n;
+    const wantSummary = last || now - run.lastSummaryAt > SUMMARY_MS;
+    if (wantSummary) run.lastSummaryAt = now;
+    run.inflight = true;
+    worker.postMessage({ cmd: "advance", runId: run.id, k, wantPoints: viz,
+                         summaryDop: wantSummary ? $("mc-dop").value : null });
+  }
+  requestAnimationFrame(tick);
+
+  // ---- controls --------------------------------------------------------------------------
+  // The rate slider is logarithmic: position 0..1000 maps to 1..2000 trials/s.
+  const rateFromSlider = (v) => Math.round(Math.exp((Math.log(MAX_RATE) * v) / 1000));
+  const sliderFromRate = (r) => (1000 * Math.log(r)) / Math.log(MAX_RATE);
+  const getRate = () => Math.min(MAX_RATE, Math.max(MIN_RATE, parseFloat($("mc-rate-num").value) || 200));
+
+  $("mc-rate").addEventListener("input", () => { $("mc-rate-num").value = rateFromSlider(+$("mc-rate").value); });
+  $("mc-rate-num").addEventListener("input", () => {
+    $("mc-rate").value = sliderFromRate(getRate());
+  });
+  $("mc-viz").addEventListener("change", () => {
+    const on = $("mc-viz").checked;
+    $("mc-rate").disabled = $("mc-rate-num").disabled = !on;
+    $("mc-legend").hidden = !on;
+    if (run) { run.carry = 0; run.lastT = run.lastSpawn = performance.now(); }
+  });
+  $("mc-preset").addEventListener("change", () => {
+    if ($("mc-preset").value) $("mc-n").value = $("mc-preset").value;
+    $("mc-preset").value = "";
+  });
+  $("mc-dop").addEventListener("change", () => {
+    if (run && run.started) worker.postMessage({ cmd: "summary", runId: run.id, dopType: $("mc-dop").value });
+  });
+  $("mc-run").addEventListener("click", () => (run && !run.finished ? cancelRun() : startRun()));
+
+  function updateLegend() {
+    const thr = parseFloat($("mc-pdop").value) || 6;
+    $("mc-legend-bar").style.background = legendGradient(thr);
+    $("mc-legend-mid").textContent = `${thr} (threshold)`;
+    $("mc-legend-hi").textContent = `≥ ${2 * thr}`;
+    $("mc-legend-bar-old").style.background = legendGradient(thr, FADE);
+    $("mc-legend-undef").style.background = cssColor(UNDEFINED_RGB);
+  }
+  updateLegend();
+  $("mc-pdop").addEventListener("input", updateLegend);
+
+  // ---- results ---------------------------------------------------------------------------
+  function render(s) {
+    if (!s.n_done) return;
+    lastSummary = s;
+    const T = s.dop.type.toUpperCase();
+    const ns = s.nsat;
+
+    $("r-done").textContent = `${s.n_done.toLocaleString()} / ${s.n.toLocaleString()}`;
+    $("r-seed").textContent = s.seed;
+    $("mc-mask-note").textContent = `(elevation mask ${s.mask_deg}°)`;
+    $("r-mean").textContent = `${f(ns.mean, 3)} ± ${f(ns.se, 3)}`;
+    const z = ns.se ? (ns.mean - ns.expected_mean) / ns.se : null;
+    $("r-check").textContent = `${f(ns.expected_mean, 3)}  (${z === null ? "–" : (z >= 0 ? "+" : "") + z.toFixed(1)} σ)`;
+    $("r-minmax").textContent = `${ns.min} / ${ns.max}`;
+    $("r-ge4").textContent = pct(ns.frac_ge4);
+    $("r-avail-label").textContent = `Good: ≥ 4 sats and PDOP ≤ ${s.pdop_max}`;
+    $("r-avail").textContent = `${pct(s.availability.p)}  (95 % CI ${pct(s.availability.lo)} – ${pct(s.availability.hi)})`;
+
+    const names = ["undefined (< 4 sats or singular)", "median", "95th percentile", "99th percentile", "max"];
+    document.querySelectorAll(".r-dop-name").forEach((el, i) => { el.textContent = `${T} ${names[i]}`; });
+    $("r-undef").textContent = s.dop.n_undefined.toLocaleString();
+    $("r-med").textContent = f(s.dop.median);
+    $("r-p95").textContent = f(s.dop.p95);
+    $("r-p99").textContent = f(s.dop.p99);
+    $("r-max").textContent = f(s.dop.max);
+    $("hist-dop-title").textContent = T;
+
+    drawSatHistogram(s);
+    drawDopHistogram(s);
+  }
+
+  function drawSatHistogram(s) {
+    const counts = s.nsat.counts;
+    const nz = counts.map((c, i) => (c > 0 ? i : -1)).filter((i) => i >= 0);
+    const lo = Math.max(0, nz[0] - 1), hi = Math.min(counts.length - 1, nz[nz.length - 1] + 1);
+    const bars = [], ticks = [];
+    for (let n = lo; n <= hi; n++) {
+      bars.push({ x0: n - 0.5, x1: n + 0.5, count: counts[n], color: n < 4 ? cssColor(BAR_FEW) : BAR, n });
+      ticks.push({ x: n, label: String(n) });
+    }
+    drawBars($("hist-n"), { bars, xMin: lo - 0.5, xMax: hi + 0.5, ticks,
+      marker: { x: s.nsat.expected_mean, label: `analytic mean ${s.nsat.expected_mean.toFixed(2)}` } });
+    $("hist-n")._bars = bars;
+    $("cap-n").textContent = `Violet bars: fewer than 4 satellites (no position fix). ${s.n_done.toLocaleString()} trials.`;
+  }
+
+  function drawDopHistogram(s) {
+    const d = s.dop;
+    if (!d.hist_counts) {
+      drawBars($("hist-dop"), { bars: [], xMin: 0, xMax: 1, ticks: [], marker: null });
+      $("cap-dop").textContent = "No trial has a defined DOP yet.";
+      return;
+    }
+    const e = d.hist_edges;
+    const bars = d.hist_counts.map((count, i) => ({ x0: e[i], x1: e[i + 1], count, color: BAR }));
+    const ticks = [0, 1, 2, 3, 4].map((k) => { const x = e[0] + ((e[e.length - 1] - e[0]) * k) / 4; return { x, label: x.toFixed(2) }; });
+    const showThr = d.type === "pdop" && s.pdop_max >= e[0] && s.pdop_max <= e[e.length - 1];
+    drawBars($("hist-dop"), { bars, xMin: e[0], xMax: e[e.length - 1], ticks,
+      marker: showThr ? { x: s.pdop_max, label: `threshold ${s.pdop_max}` } : null });
+    $("hist-dop")._bars = bars;
+    const over = d.overflow ? ` ${d.overflow.toLocaleString()} trials above ${e[e.length - 1].toFixed(2)} not shown.` : "";
+    $("cap-dop").textContent = `${(s.n_done - d.n_undefined).toLocaleString()} trials with a defined ${d.type.toUpperCase()}.${over}`;
+  }
+
+  // hover: show the bar under the mouse
+  $("hist-n").addEventListener("mousemove", (ev) => {
+    const i = barAt($("hist-n"), ev.clientX), s = lastSummary;
+    if (i < 0 || !s) return;
+    const b = $("hist-n")._bars[i];
+    $("cap-n").textContent = `${b.n} satellites: ${b.count.toLocaleString()} trials (${pct(b.count / s.n_done)})`;
+  });
+  $("hist-dop").addEventListener("mousemove", (ev) => {
+    const i = barAt($("hist-dop"), ev.clientX), s = lastSummary;
+    if (i < 0 || !s) return;
+    const b = $("hist-dop")._bars[i];
+    $("cap-dop").textContent = `${s.dop.type.toUpperCase()} ${b.x0.toFixed(2)} – ${b.x1.toFixed(2)}: ${b.count.toLocaleString()} trials (${pct(b.count / s.n_done)} of all)`;
+  });
+  for (const id of ["hist-n", "hist-dop"]) {
+    $(id).addEventListener("mouseleave", () => { if (lastSummary) { drawSatHistogram(lastSummary); drawDopHistogram(lastSummary); } });
+  }
+
+  // charts drawn while the tab was hidden have zero width, so the tab redraws them when shown
+  return { ensureWorker, redraw: () => { if (lastSummary) render(lastSummary); } };
+}
