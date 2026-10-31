@@ -15,7 +15,7 @@ import math
 
 import numpy as np
 
-from . import constellation, geometry
+from . import constellation, geometry, presets
 from .dop import KEYS, dop_batch
 
 MAX_TRIALS = 1_000_000
@@ -57,11 +57,19 @@ def single_sat_probability(a, mask_deg):
     return (1.0 - np.cos(cap_half_angle(a, mask_deg))) / 2.0
 
 
-def expected_mean_visible(elements, mask_deg):
-    """Expected number of visible satellites for a uniform random location.
-    By linearity of expectation this is the sum of the single-satellite
-    probabilities, and it does not depend on the time."""
-    return float(np.sum(single_sat_probability(elements[:, 0], mask_deg)))
+def expected_mean_visible(elements, mask_deg, n_grid=2048):
+    """Expected number of visible satellites for a uniform random location (and a time spread
+    evenly over whole orbits).
+
+    By linearity of expectation this is the sum over satellites of the single-satellite
+    probability. For a circular orbit that probability does not depend on the time. For an
+    ellipse the distance r changes along the orbit, so the probability is averaged over the
+    orbit: over the mean anomaly M (uniform in time), using n_grid equally spaced values
+    (for a smooth periodic function this converges very fast)."""
+    M = np.linspace(0.0, 2.0 * np.pi, n_grid, endpoint=False)
+    a, ecc = elements[:, constellation.A, None], elements[:, constellation.ECC, None]
+    r = a * (1.0 - ecc * np.cos(constellation.solve_kepler(M[None, :], ecc)))      # (N, n_grid)
+    return float(np.sum(np.mean(single_sat_probability(r, mask_deg), axis=1)))
 
 
 # ---- one batch of trials -----------------------------------------------------------
@@ -69,8 +77,8 @@ def expected_mean_visible(elements, mask_deg):
 def run_trials(elements, lat, lon, t, mask_deg):
     """Satellite counts and DOPs for trials at (lat, lon, t) (equal-length arrays)."""
     sat = constellation.positions(elements, t)           # (M, N, 3)
-    rx = geometry.receiver_position(lat, lon)            # (M, 3)
-    enu = geometry.enu_basis(lat, lon)                   # (M, 3, 3)
+    rx = geometry.receiver_position(lat, lon, t)         # (M, 3), the Earth has turned by omega*t
+    enu = geometry.enu_basis(lat, lon, t)                # (M, 3, 3)
     _, el, unit = geometry.look_angles(rx, sat, enu)
     visible = el >= mask_deg
     out = dop_batch(unit, visible, enu)
@@ -83,7 +91,7 @@ def run_trials(elements, lat, lon, t, mask_deg):
 class MonteCarlo:
     def __init__(self, n, seed=None, pdop_max=6.0, mask_deg=0.0, elements=None):
         if elements is None:
-            elements = constellation.walker(24, 6, 1)
+            elements = presets.gps()
         if seed is None:
             seed = int(np.random.SeedSequence().entropy % 2**32)
         self.elements, self.seed, self.n = elements, int(seed), int(n)
@@ -91,9 +99,11 @@ class MonteCarlo:
 
         rng = np.random.default_rng(self.seed)
         self.lat, self.lon = sample_locations(rng, self.n)
-        # Nonrotating Earth: the geometry repeats every orbital period.
+        # The satellite geometry repeats every orbital period. Earth rotation does not
+        # matter here: longitude is drawn uniformly and independently of t, so the receiver's
+        # inertial longitude (lon + omega*t) is uniform for every t.
         # (Assumes one common orbit radius; revisit when constellations are mixed.)
-        self.t = sample_times(rng, self.n, constellation.period(elements[0, 0]))
+        self.t = sample_times(rng, self.n, constellation.period(elements[0, constellation.A]))
 
         self.n_visible = np.zeros(self.n, dtype=int)
         self.dop = {k: np.full(self.n, np.nan) for k in KEYS}

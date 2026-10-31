@@ -26,3 +26,46 @@ The PDFs are kept locally in paper/ (git-ignored). Link status was checked on 20
    DOI:        https://doi.org/10.12942/lrr-2003-1   (redirects to link.springer.com/10.12942/lrr-2003-1)
    Printed on the paper: http://www.livingreviews.org/lrr-2003-1
    Note: the journal later published a revised version (2007); the local PDF is the 2003 original.
+
+
+Constellation parameters (used in web/sim/presets.py)
+=====================================================
+
+Checked on 2026-10-31. "Verified" = read from the source itself; "reported" = seen quoted in a
+search result but the document could not be opened from here.
+
+4. Galileo. European GNSS Service Centre, "Reference Constellation Orbital and Technical Parameters".
+   https://gsc-europa.eu/node/502
+   Verified: 24 nominal satellites, Walker 24/3/1, 3 planes of 8, semi-major axis 29,599.8 km,
+   eccentricity 0, inclination 56.0 deg, planes 120 deg apart, 45 deg spacing inside a plane, 15 deg
+   between adjacent planes. (Its RAAN values refer to an epoch of 2016-11-21; the app uses an
+   arbitrary orientation instead.)
+   Repeat cycle: 17 revolutions in 10 days, ESA Navipedia, https://gssc.esa.int/navipedia/index.php/GALILEO_Architecture
+
+5. BeiDou-3. China Satellite Navigation Office, BDS Signal-in-Space Interface Control Document (2020 edition).
+   http://en.beidou.gov.cn/SYSTEMS/ICD/202008/P020200803539206360377.pdf
+   Reported (the server refused the connection when opened): 3 GEO + 3 IGSO + 24 MEO; inclination 55 deg
+   (MEO, IGSO) and 0 deg (GEO); reference semi-major axis 27,906.1 km (MEO) and 42,162.2 km (IGSO/GEO);
+   GEO altitude 35,786 km at 80, 110.5 and 140 deg E.
+   MEO Walker 24/3/1 and the 12 h 53 min (7/13 sidereal day) period: Januszewski (2016),
+   https://transnav.eu/html,658.html (verified: "selected from the Walker 24/3/1 constellation"), and
+   https://en.wikipedia.org/wiki/BeiDou (verified: 7/13 sidereal day, 7 sidereal day revisit period).
+   IGSO ground-track crossing at 118 deg E: ESA Navipedia, https://gssc.esa.int/navipedia/index.php/BeiDou_Space_Segment
+   and Januszewski (2016) (verified; both describe the planned final constellation). Later IGSO launches
+   are listed at 120 deg E on Wikipedia; not used.
+   Not verified: the exact IGSO phasing between the three satellites (the app makes their ground tracks
+   coincide, an idealization).
+
+
+Data
+====
+
+6. Natural Earth, 1:110m Physical Vectors, "Land" (polygons of the world's land masses).
+   Used only to colour the low-poly Earth (land vs ocean); not used in any DOP calculation.
+   Local file:   data/ne_110m_land.geojson   (127 polygons, downloaded 2026-10-31)
+   Downloaded from: https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_110m_land.geojson
+   Dataset page: https://www.naturalearthdata.com/downloads/110m-physical-vectors/110m-land/
+   Terms:        https://www.naturalearthdata.com/about/terms-of-use/
+                 ("All versions of Natural Earth raster + vector map data ... are in the public
+                 domain"; attribution is not required, but optional: "Made with Natural Earth.")
+   Turned into web/data/land_mask.json (1-degree grid) by tools/landmask.py.

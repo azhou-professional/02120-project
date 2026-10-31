@@ -25,8 +25,8 @@ def test_batch_matches_scalar_pipeline(mask_deg):
     n_undefined = 0
     for i in range(200):
         sat = c.positions(ELEMENTS, t[i])
-        rx = g.receiver_position(lat[i], lon[i])
-        enu = g.enu_basis(lat[i], lon[i])
+        rx = g.receiver_position(lat[i], lon[i], t[i])           # the Earth has turned by omega*t
+        enu = g.enu_basis(lat[i], lon[i], t[i])
         _, el, unit = g.look_angles(rx, sat, enu)
         vis = el >= mask_deg
         ref = dop(unit[vis], enu)

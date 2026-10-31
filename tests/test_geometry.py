@@ -48,6 +48,64 @@ def test_satellite_ground_latitude_never_exceeds_inclination():
     assert np.abs(lats).max() > 54.9
 
 
+# ---- rotating Earth ---------------------------------------------------------------------
+
+def test_earth_turns_once_per_sidereal_day():
+    assert np.isclose(g.earth_angle_deg(0.0), 0.0)
+    assert np.isclose(g.earth_angle_deg(g.T_SIDEREAL), 360.0)
+    assert np.isclose(g.earth_angle_deg(g.T_SIDEREAL / 4), 90.0)
+    assert abs(g.T_SIDEREAL / 3600 - 23.9345) < 1e-3                   # 23 h 56 min 4 s
+
+
+def test_receiver_moves_with_the_earth():
+    quarter = g.T_SIDEREAL / 4
+    assert np.allclose(g.receiver_position(0, 0, quarter), [0, g.R_EARTH, 0], atol=1e-6)    # lon 0 -> +y
+    assert np.allclose(g.receiver_position(90, 0, quarter), [0, 0, g.R_EARTH], atol=1e-6)   # pole stays put
+    assert np.allclose(g.receiver_position(40, -80, g.T_SIDEREAL), g.receiver_position(40, -80), atol=1e-6)
+
+
+def test_local_frame_turns_with_the_earth():
+    east, north, up = g.enu_basis(0, 0, g.T_SIDEREAL / 4)
+    assert np.allclose(east, [-1, 0, 0], atol=1e-12)    # east, up, north all carried round by 90 degrees
+    assert np.allclose(up, [0, 1, 0], atol=1e-12)
+    assert np.allclose(north, [0, 0, 1], atol=1e-12)
+
+
+@pytest.mark.parametrize("t", [0.0, 1000.0, 30000.0, 86164.0905, 400000.0])
+def test_lat_lon_inverts_receiver_position_at_any_time(t):
+    for lat, lon in [(0, 0), (40.4, -80.0), (-33.9, 151.2), (-10, -179)]:
+        la, lo = g.lat_lon(g.receiver_position(lat, lon, t), t)
+        assert np.isclose(la, lat) and np.isclose(lo, lon)
+
+
+def test_geostationary_satellite_hangs_over_one_spot():
+    a_geo = c.geostationary_radius()
+    assert abs(a_geo - 42164.17) < 0.05
+    assert np.isclose(c.period(a_geo), g.T_SIDEREAL)                    # period = one sidereal day
+    lon_sat = 77.5
+    one = c.geostationary(lon_sat)                                      # equatorial circle, phase = longitude at t=0
+    for t in np.linspace(0, 3 * g.T_SIDEREAL, 25):
+        lat, lon = g.lat_lon(c.positions(one, t), t)
+        assert np.isclose(lat[0], 0.0, atol=1e-9) and np.isclose(lon[0], lon_sat, atol=1e-9)
+        # seen from the equator right below it, it stays at the zenith all the time
+        rx, enu = g.receiver_position(0, lon_sat, t), g.enu_basis(0, lon_sat, t)
+        _, el, _ = g.look_angles(rx, c.positions(one, t), enu)
+        assert np.isclose(el[0], 90.0, atol=1e-6)
+
+
+def test_gps_ground_view_repeats_after_a_sidereal_day():
+    """GPS makes ~2 revolutions per sidereal day, so a fixed ground site sees (almost) the same
+    sky one sidereal day later (the nominal orbit radius gives 2.0002 revolutions)."""
+    elements = c.walker(24, 6, 1)
+    lat, lon = 40.4, -80.0
+    for t in (0.0, 15000.0, 50000.0):
+        els = []
+        for tt in (t, t + g.T_SIDEREAL):
+            rx, enu = g.receiver_position(lat, lon, tt), g.enu_basis(lat, lon, tt)
+            els.append(g.look_angles(rx, c.positions(elements, tt), enu)[1])
+        assert np.max(np.abs(els[0] - els[1])) < 0.5                    # degrees
+
+
 def test_satellite_overhead_is_90_deg():
     _, el, _ = look(30, 50, 3 * g.R_EARTH * g.receiver_position(30, 50) / g.R_EARTH)
     assert np.isclose(el[0], 90.0)

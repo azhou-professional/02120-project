@@ -8,19 +8,20 @@ ELEMENTS = c.walker(24, 6, 1)
 
 
 def test_table_shape():
-    assert ELEMENTS.shape == (24, 4)
+    assert ELEMENTS.shape == (24, 6)
+    assert np.all(ELEMENTS[:, c.ECC] == 0) and np.all(ELEMENTS[:, c.ARGP] == 0)     # circular
 
 
 def test_planes_are_60_deg_apart_with_4_sats_each():
-    raans = np.unique(ELEMENTS[:, 2])
+    raans = np.unique(ELEMENTS[:, c.RAAN])
     assert np.allclose(raans, [0, 60, 120, 180, 240, 300])
     for raan in raans:
-        assert np.sum(ELEMENTS[:, 2] == raan) == 4
+        assert np.sum(ELEMENTS[:, c.RAAN] == raan) == 4
 
 
 def test_in_plane_spacing_is_90_and_plane_phase_offset_is_15():
     for p in range(6):
-        m0 = ELEMENTS[4 * p:4 * p + 4, 3]
+        m0 = ELEMENTS[4 * p:4 * p + 4, c.M0]
         assert np.allclose(np.diff(m0) % 360, 90)          # 90 deg inside a plane
         assert np.isclose(m0[0], (15 * p) % 360)           # F*360/T = 15 deg per plane
 
@@ -53,7 +54,7 @@ def test_orbit_plane_has_55_deg_inclination_and_correct_raan():
     assert np.allclose(inc, 55.0, atol=1e-3)
     # h = (sin(raan) sin(i), -cos(raan) sin(i), cos(i))
     raan = np.degrees(np.arctan2(h[:, 0], -h[:, 1])) % 360
-    assert np.allclose((raan - ELEMENTS[:, 2] + 180) % 360 - 180, 0, atol=1e-3)
+    assert np.allclose((raan - ELEMENTS[:, c.RAAN] + 180) % 360 - 180, 0, atol=1e-3)
 
 
 def test_argument_of_latitude_matches_the_actual_position():
@@ -62,7 +63,7 @@ def test_argument_of_latitude_matches_the_actual_position():
     position (independent of the formula used for u) and compare."""
     for t in (0.0, 3000.0, 25000.0):
         r = c.positions(ELEMENTS, t)
-        raan, inc = np.radians(ELEMENTS[:, 2]), np.radians(ELEMENTS[:, 1])
+        raan, inc = np.radians(ELEMENTS[:, c.RAAN]), np.radians(ELEMENTS[:, c.INC])
         node = np.stack([np.cos(raan), np.sin(raan), np.zeros(24)], axis=1)
         cos_u = np.sum(r * node, axis=1) / c.A_GPS
         sin_u = r[:, 2] / (c.A_GPS * np.sin(inc))                  # z = a sin(i) sin(u)
@@ -72,14 +73,15 @@ def test_argument_of_latitude_matches_the_actual_position():
 
 
 def test_argument_of_latitude_at_start_and_after_one_period():
-    assert np.allclose(c.argument_of_latitude(ELEMENTS, 0.0), ELEMENTS[:, 3])
+    assert np.allclose(c.argument_of_latitude(ELEMENTS, 0.0), ELEMENTS[:, c.M0])
     after = c.argument_of_latitude(ELEMENTS, c.period(c.A_GPS))
-    assert np.allclose((after - ELEMENTS[:, 3] + 180) % 360 - 180, 0, atol=1e-6)
+    assert np.allclose((after - ELEMENTS[:, c.M0] + 180) % 360 - 180, 0, atol=1e-6)
 
 
 def test_speed_and_mean_motion_consistent():
-    assert np.isclose(c.speed(c.A_GPS), c.A_GPS * c.mean_motion(c.A_GPS))     # v = a * n
-    assert abs(c.speed(c.A_GPS) - 3.87) < 0.01                                 # GPS: ~3.87 km/s
+    assert np.isclose(c.circular_speed(c.A_GPS), c.A_GPS * c.mean_motion(c.A_GPS))     # v = a * n
+    assert abs(c.circular_speed(c.A_GPS) - 3.87) < 0.01                                 # GPS: ~3.87 km/s
+    assert np.allclose(c.speed(ELEMENTS, 1234.0), c.circular_speed(c.A_GPS))            # vis-viva, e = 0
 
 
 def test_names():
