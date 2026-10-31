@@ -3,10 +3,15 @@
 Earth is a perfect sphere of radius R_EARTH (km) that rotates at the sidereal rate.
 
 Frames: the satellites live in a fixed (inertial) frame with +z through the north
-pole. The Earth turns about +z, so a receiver at fixed (lat, lon) on the ground moves
-through that frame. At t = 0 the Earth-fixed longitude 0 points along inertial +x.
-Latitude/longitude arguments below are always Earth-fixed (what a map shows); the
-time argument t (seconds) says how far the Earth has turned.
+pole and +x toward the vernal equinox (the direction astronomers measure sidereal
+time from). The Earth turns about +z, so a receiver at fixed (lat, lon) on the
+ground moves through that frame. Latitude/longitude arguments below are always
+Earth-fixed (what a map shows).
+
+Time: t is seconds after the epoch, 2026-01-01 00:00:00 UTC. The angle between
+longitude 0 (Greenwich) and +x is the Greenwich Mean Sidereal Time (GMST), so a
+calendar date and time fixes where the Earth is turned. (Precession, nutation,
+polar motion and the small UTC/UT1 difference are ignored.)
 
 Every function works on a single receiver or on a whole array of receivers
 (Monte Carlo trials): extra leading array dimensions are carried through.
@@ -19,9 +24,31 @@ T_SIDEREAL = 86164.0905     # s, one rotation of the Earth relative to the stars
 OMEGA_EARTH = 2.0 * np.pi / T_SIDEREAL   # rad/s
 
 
+def julian_date(year, month, day, hour=0.0):
+    """Julian Date of a UTC calendar date (Gregorian calendar), Meeus, Astronomical Algorithms, ch. 7."""
+    if month <= 2:
+        year, month = year - 1, month + 12
+    a = year // 100
+    b = 2 - a + a // 4
+    return int(365.25 * (year + 4716)) + int(30.6001 * (month + 1)) + day + hour / 24.0 + b - 1524.5
+
+
+def gmst_deg(jd):
+    """Greenwich Mean Sidereal Time (degrees, 0-360) at Julian Date jd (UT), Meeus eq. 12.4."""
+    T = (jd - 2451545.0) / 36525.0
+    theta = 280.46061837 + 360.98564736629 * (jd - 2451545.0) + 0.000387933 * T**2 - T**3 / 38710000.0
+    return theta % 360.0
+
+
+EPOCH_UTC = "2026-01-01T00:00:00Z"                 # t = 0
+EPOCH_JD = julian_date(2026, 1, 1)                 # 2461041.5
+EARTH_ANGLE_AT_EPOCH = gmst_deg(EPOCH_JD)          # degrees, about 100.66 (GMST 6h 42m 39s)
+
+
 def earth_angle_deg(t):
-    """Angle (degrees) the Earth has turned t seconds after t = 0."""
-    return np.degrees(OMEGA_EARTH * np.asarray(t, dtype=float))
+    """Angle (degrees) from inertial +x to longitude 0 at t seconds after the epoch: the GMST,
+    which grows at the sidereal rate (one turn per 86,164.0905 s)."""
+    return EARTH_ANGLE_AT_EPOCH + np.degrees(OMEGA_EARTH * np.asarray(t, dtype=float))
 
 
 def receiver_position(lat_deg, lon_deg, t=0.0):

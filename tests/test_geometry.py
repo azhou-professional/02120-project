@@ -6,20 +6,29 @@ import pytest
 from sim import constellation as c
 from sim import geometry as g
 
+# The geometry tests below are easiest to read when longitude 0 points along inertial +x, i.e. when
+# the Earth's angle (GMST) is 0. That happens T0 seconds after the epoch (the Earth is turned about
+# 100 degrees at the epoch itself).
+T0 = ((360.0 - g.EARTH_ANGLE_AT_EPOCH) % 360.0) / np.degrees(g.OMEGA_EARTH)
+
 
 def look(lat, lon, sat):
-    rx = g.receiver_position(lat, lon)
-    return g.look_angles(rx, np.array([sat], dtype=float), g.enu_basis(lat, lon))
+    rx = g.receiver_position(lat, lon, T0)
+    return g.look_angles(rx, np.array([sat], dtype=float), g.enu_basis(lat, lon, T0))
+
+
+def test_earth_angle_is_zero_at_T0():
+    assert np.isclose(g.earth_angle_deg(T0) % 360.0, 0.0, atol=1e-9)
 
 
 def test_receiver_positions():
-    assert np.allclose(g.receiver_position(0, 0), [g.R_EARTH, 0, 0])
-    assert np.allclose(g.receiver_position(0, 90), [0, g.R_EARTH, 0], atol=1e-9)
-    assert np.allclose(g.receiver_position(90, 0), [0, 0, g.R_EARTH], atol=1e-9)
+    assert np.allclose(g.receiver_position(0, 0, T0), [g.R_EARTH, 0, 0])
+    assert np.allclose(g.receiver_position(0, 90, T0), [0, g.R_EARTH, 0], atol=1e-6)
+    assert np.allclose(g.receiver_position(90, 0, T0), [0, 0, g.R_EARTH], atol=1e-6)
 
 
 def test_enu_at_lat0_lon0():
-    east, north, up = g.enu_basis(0, 0)
+    east, north, up = g.enu_basis(0, 0, T0)
     assert np.allclose(east, [0, 1, 0])
     assert np.allclose(north, [0, 0, 1])
     assert np.allclose(up, [1, 0, 0])
@@ -51,21 +60,46 @@ def test_satellite_ground_latitude_never_exceeds_inclination():
 # ---- rotating Earth ---------------------------------------------------------------------
 
 def test_earth_turns_once_per_sidereal_day():
-    assert np.isclose(g.earth_angle_deg(0.0), 0.0)
-    assert np.isclose(g.earth_angle_deg(g.T_SIDEREAL), 360.0)
-    assert np.isclose(g.earth_angle_deg(g.T_SIDEREAL / 4), 90.0)
+    a0 = g.earth_angle_deg(0.0)
+    assert np.isclose(g.earth_angle_deg(g.T_SIDEREAL) - a0, 360.0)
+    assert np.isclose(g.earth_angle_deg(g.T_SIDEREAL / 4) - a0, 90.0)
     assert abs(g.T_SIDEREAL / 3600 - 23.9345) < 1e-3                   # 23 h 56 min 4 s
 
 
 def test_receiver_moves_with_the_earth():
     quarter = g.T_SIDEREAL / 4
-    assert np.allclose(g.receiver_position(0, 0, quarter), [0, g.R_EARTH, 0], atol=1e-6)    # lon 0 -> +y
-    assert np.allclose(g.receiver_position(90, 0, quarter), [0, 0, g.R_EARTH], atol=1e-6)   # pole stays put
+    assert np.allclose(g.receiver_position(0, 0, T0 + quarter), [0, g.R_EARTH, 0], atol=1e-6)    # lon 0 -> +y
+    assert np.allclose(g.receiver_position(90, 0, quarter), [0, 0, g.R_EARTH], atol=1e-6)        # pole stays put
     assert np.allclose(g.receiver_position(40, -80, g.T_SIDEREAL), g.receiver_position(40, -80), atol=1e-6)
 
 
+# ---- the calendar: Julian Date and Greenwich sidereal time ----------------------------------------
+
+def test_julian_date_published_values():
+    assert g.julian_date(2000, 1, 1, 12.0) == 2451545.0                 # the J2000.0 epoch
+    assert g.julian_date(1987, 4, 10) == 2446895.5                      # Meeus, example 12.a
+    assert g.julian_date(1957, 10, 4, 19.0 + 26.0 / 60 + 24.0 / 3600) - 2436116.31 < 1e-3   # Meeus example 7.a (Sputnik)
+    assert g.EPOCH_JD == 2461041.5                                       # 2026-01-01 0h UT
+
+
+def test_gmst_matches_the_published_worked_examples():
+    """Meeus, Astronomical Algorithms, example 12.a: 1987 April 10, 0h UT, GMST = 13h 10m 46.3668s
+    = 197.693195 deg. Example 12.b: same day 19h 21m 00s UT, GMST = 128.737873 deg."""
+    assert abs(g.gmst_deg(2446895.5) - 197.693195) < 1e-5
+    assert abs(g.gmst_deg(g.julian_date(1987, 4, 10, 19 + 21 / 60)) - 128.737873) < 1e-5
+
+
+def test_earth_angle_is_the_gmst_of_the_date():
+    """The model turns the Earth at one turn per 86,164.0905 s (a rounded sidereal day); Meeus's GMST
+    rate has more digits. They drift apart by about 0.00005 deg per year (5 m on the equator), so
+    agreement to 0.0001 deg over the first year is what to expect."""
+    for days in (0.0, 0.25, 31.6, 180.0, 364.9):
+        jd = g.EPOCH_JD + days
+        assert abs((g.earth_angle_deg(days * 86400.0) - g.gmst_deg(jd) + 180) % 360 - 180) < 1e-4
+
+
 def test_local_frame_turns_with_the_earth():
-    east, north, up = g.enu_basis(0, 0, g.T_SIDEREAL / 4)
+    east, north, up = g.enu_basis(0, 0, T0 + g.T_SIDEREAL / 4)
     assert np.allclose(east, [-1, 0, 0], atol=1e-12)    # east, up, north all carried round by 90 degrees
     assert np.allclose(up, [0, 1, 0], atol=1e-12)
     assert np.allclose(north, [0, 0, 1], atol=1e-12)
@@ -107,7 +141,7 @@ def test_gps_ground_view_repeats_after_a_sidereal_day():
 
 
 def test_satellite_overhead_is_90_deg():
-    _, el, _ = look(30, 50, 3 * g.R_EARTH * g.receiver_position(30, 50) / g.R_EARTH)
+    _, el, _ = look(30, 50, 3 * g.receiver_position(30, 50, T0))
     assert np.isclose(el[0], 90.0)
 
 

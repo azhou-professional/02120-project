@@ -8,6 +8,7 @@ at t = 0 is arbitrary too.
 import numpy as np
 
 from . import constellation as c
+from . import geometry
 
 # Galileo (GSC "Reference Constellation Orbital and Technical Parameters"): Walker 24/3/1,
 # semi-major axis 29,599.8 km, inclination 56 deg.
@@ -43,13 +44,15 @@ def beidou_igso_geo():
     Both use the geostationary radius (period exactly one sidereal day), so the GEO satellites
     stay over their longitudes and the IGSO satellites trace a figure-eight on the ground.
     The three IGSO satellites share one ground track crossing the equator at 118 deg E: plane k
-    has RAAN = 118 + 120 k and phase -120 k, which puts satellite k on the same track as
-    satellite 0, a third of a day (k * T_sidereal / 3) later. The ICD's nominal IGSO/GEO radius
+    has RAAN = 118 + (Earth's angle at the epoch) + 120 k and phase -120 k, which puts satellite 0
+    on the equator at 118 E at t = 0 and satellite k on the same track a third of a sidereal day
+    (k * T_sidereal / 3) later. The ICD's nominal IGSO/GEO radius
     is 42,162.2 km (2 km smaller); that would make the GEO satellites drift, so it is not used.
     """
     a = c.geostationary_radius()
     k = np.arange(3)
-    igso = c.make_elements(a, 0.0, BDS_IGSO_INC, (BDS_IGSO_CROSSING_LON + 120.0 * k) % 360.0, 0.0, (-120.0 * k) % 360.0)
+    raan = (BDS_IGSO_CROSSING_LON + geometry.EARTH_ANGLE_AT_EPOCH + 120.0 * k) % 360.0
+    igso = c.make_elements(a, 0.0, BDS_IGSO_INC, raan, 0.0, (-120.0 * k) % 360.0)
     geo = np.vstack([c.geostationary(lon) for lon in BDS_GEO_LONS])
     return np.vstack([igso, geo])
 
