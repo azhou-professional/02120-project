@@ -1,6 +1,7 @@
 // Shared by the page and the Monte-Carlo worker: start Pyodide, load numpy, and copy the
 // sim/*.py files into Pyodide's file system so `import sim.api` etc. work.
-const PY_FILES = ["__init__.py", "constellation.py", "geometry.py", "dop.py", "api.py", "montecarlo.py"];
+// Keep in step with web/sim/*.py (tests/test_pyloader.py checks this).
+const PY_FILES = ["__init__.py", "constellation.py", "geometry.py", "dop.py", "presets.py", "api.py", "montecarlo.py"];
 
 export async function loadSim(loadPyodide) {
   const pyodide = await loadPyodide();

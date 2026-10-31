@@ -10,12 +10,16 @@ The proposal is in `proposal.md`; the papers it builds on are listed in `papers.
 ## Run it locally
 
 ```bash
-./launch.sh          # same as: cd web && python3 -m http.server 8000
+./launch.sh          # runs tools/serve.py: serves web/ at http://localhost:8000
 ```
 
 Then open http://localhost:8000. Use a web server, not a double-click on `index.html`: the page
 fetches the Python files over HTTP. An internet connection is needed because Pyodide (v0.26.4,
 Python + numpy in the browser) and Three.js (v0.160.0) are loaded from the jsDelivr CDN.
+
+`tools/serve.py` is Python's standard web server plus a `Cache-Control: no-store` header. Without
+it, browsers keep old copies of JavaScript files, so a code change can look like it did not work.
+(If you use `python3 -m http.server` instead, hard-reload with Ctrl+Shift+R after changes.)
 
 ## Run the tests
 
@@ -41,6 +45,7 @@ handles the controls.
 | Monte Carlo runs in a Web Worker with its own Pyodide | `web/mc-worker.js`, `web/pyloader.js` |
 | Low-poly Earth: mesh and land colouring | `web/earth.js` |
 | Land/ocean grid made from the Natural Earth outlines | `tools/landmask.py` (reads `data/ne_110m_land.geojson`, writes `web/data/land_mask.json`) |
+| Local web server (no caching) | `tools/serve.py`, started by `launch.sh` |
 | Tests | `tests/` |
 
 `main.py` at the top level is an early first draft (it uses Earth radius 6371 km and a nonrotating

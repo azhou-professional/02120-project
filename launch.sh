@@ -1,5 +1,4 @@
 #!/bin/bash
-
-
-cd web/
-python3 -m http.server 8000
+# Serve the web app at http://localhost:8000 (no caching, so reloads always show the latest code).
+cd "$(dirname "$0")"
+python3 tools/serve.py 8000
