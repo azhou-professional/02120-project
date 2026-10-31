@@ -52,7 +52,25 @@ function satelliteInfoHtml(s, i) {
          `<div style="color:var(--muted);margin-top:4px">Click to switch ${s.enabled[i] ? "off" : "on"}</div>`;
 }
 
-const TABS = ["live", "mc", "cs"];
+const TABS = ["live", "mc", "cs", "tr"];
+
+// Side view of the cone-shaped valley: the receiver at the bottom, walls at the blocking angle, the
+// hidden part of the sky shaded. Purely a picture; the numbers come from Python.
+function drawValley(svg, on, angle) {
+  const W = 300, H = 140, cx = W / 2, base = 118, R = 105;
+  const a = (on ? angle : 0) * Math.PI / 180;
+  const wall = (side) => `${cx},${base} ${cx + side * R * Math.cos(a)},${base - R * Math.sin(a)} ${cx + side * R},${base}`;
+  svg.innerHTML =
+    `<path d="M ${cx - R} ${base} A ${R} ${R} 0 0 1 ${cx + R} ${base}" fill="none" stroke="#2a3441"/>` +
+    (on ? `<polygon points="${wall(-1)}" fill="#ff8a80" fill-opacity="0.18"/><polygon points="${wall(1)}" fill="#ff8a80" fill-opacity="0.18"/>` +
+          `<line x1="${cx}" y1="${base}" x2="${cx + R * Math.cos(a)}" y2="${base - R * Math.sin(a)}" stroke="#ff8a80"/>` +
+          `<line x1="${cx}" y1="${base}" x2="${cx - R * Math.cos(a)}" y2="${base - R * Math.sin(a)}" stroke="#ff8a80"/>` +
+          `<text x="${cx + 36}" y="${base - 6}" fill="#ff8a80" font-size="11">${angle}°</text>` : "") +
+    `<line x1="10" y1="${base}" x2="${W - 10}" y2="${base}" stroke="#8b98a8"/>` +
+    `<circle cx="${cx}" cy="${base}" r="4" fill="#ff3b30"/>` +
+    `<text x="${cx}" y="${H - 4}" fill="#8b98a8" font-size="11" text-anchor="middle">receiver</text>` +
+    `<text x="${cx}" y="10" fill="#8b98a8" font-size="11" text-anchor="middle">${on ? "open sky above the walls" : "open sky down to the horizon"}</text>`;
+}
 
 function setupTabs(onShow) {
   const show = (which) => {
@@ -100,7 +118,8 @@ async function main() {
   function setRunLocked(on) {
     featured = null;
     if (on) { playing = false; $("play").textContent = "Play"; }
-    for (const id of ["lat", "lon", "date", "time", "play", "speed"]) $(id).disabled = on;
+    for (const id of ["lat", "lon", "date", "time", "play", "speed", "tr-on"]) $(id).disabled = on;
+    $("tr-angle").disabled = $("tr-angle-num").disabled = on || !$("tr-on").checked;
     $("live-lock-note").hidden = !on;
     $("live-lock-note").textContent = "Monte Carlo run in progress: the time and receiver follow its trials.";
     cons.setLocked(on);
@@ -140,8 +159,29 @@ async function main() {
   cons.addPreset("gps");
   window.app = { api, globe, cons };       // for poking around in the browser console, and for browser tests
 
+  // ---- terrain (Stage 4) ---------------------------------------------------------------------------
+  // A cone-shaped valley: one blocking angle in every direction. Python applies it to the live view;
+  // the Monte Carlo gets the same angle as its elevation mask.
+  const terrainAngle = () => {
+    const v = parseFloat($("tr-angle-num").value);
+    return $("tr-on").checked && Number.isFinite(v) ? Math.min(80, Math.max(0, v)) : 0;
+  };
+  function applyTerrain() {
+    const on = $("tr-on").checked;
+    $("tr-angle").disabled = $("tr-angle-num").disabled = !on;
+    const angle = terrainAngle();
+    api.set_terrain(on ? JSON.stringify({ type: "cone", angle_deg: angle }) : "null");
+    drawValley($("tr-diagram"), on, angle);
+    $("tr-msg").textContent = on ? `Satellites below ${angle}° elevation are hidden in every direction.` : "Open sky: every satellite above the horizon can be used.";
+    dirty = true;
+  }
+  $("tr-on").addEventListener("change", applyTerrain);
+  $("tr-angle").addEventListener("input", () => { $("tr-angle-num").value = $("tr-angle").value; applyTerrain(); });
+  $("tr-angle-num").addEventListener("input", () => { $("tr-angle").value = $("tr-angle-num").value; applyTerrain(); });
+  applyTerrain();
+
   mc = initMonteCarlo(globe, {
-    getElements: () => cons.activeElements(), api, onRunState: setRunLocked, onFeatured: showFeatured,
+    getElements: () => cons.activeElements(), getMaskDeg: terrainAngle, api, onRunState: setRunLocked, onFeatured: showFeatured,
   });
   mc.refreshWindow();
   setupTabs((which) => {

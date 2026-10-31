@@ -17,7 +17,7 @@ onmessage = async ({ data }) => {
   try {
     if (data.cmd === "start") {
       currentRun = data.runId;
-      const info = JSON.parse(mc.mc_start(data.n, data.seed, data.pdopMax, 0.0, JSON.stringify(data.elements), data.windowS));
+      const info = JSON.parse(mc.mc_start(data.n, data.seed, data.pdopMax, data.maskDeg, JSON.stringify(data.elements), data.windowS));
       postMessage({ type: "started", runId: data.runId, ...info });
     } else if (data.runId !== currentRun) {
       return;                                    // stale request from an older run

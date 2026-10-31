@@ -19,7 +19,8 @@ const f = (x, d = 2) => (x === null || x === undefined ? "–" : x.toFixed(d));
 // api: the page's Python (for the common repeat period of the satellites)
 // onRunState(running): a run started or ended (the page locks its time and receiver controls while it runs)
 // onFeatured({lat, lon, t}): about once a second of a visualized run, one trial to show in the live view
-export function initMonteCarlo(globe, { getElements, api, onRunState, onFeatured }) {
+// getMaskDeg(): the terrain's blocking angle (a cone-shaped valley), used as the elevation mask
+export function initMonteCarlo(globe, { getElements, getMaskDeg, api, onRunState, onFeatured }) {
   let worker = null, ready = false, runCounter = 0, run = null, lastSummary = null;
   let lcm = { found: false, reason: "not computed yet" };    // approximate LCM of the periods (from Python)
 
@@ -132,7 +133,7 @@ export function initMonteCarlo(globe, { getElements, api, onRunState, onFeatured
     $("mc-progress").value = 0;
     setRunning(true);
     $("mc-status").textContent = "Starting…";
-    worker.postMessage({ cmd: "start", runId: run.id, n, seed, pdopMax, elements, windowS });
+    worker.postMessage({ cmd: "start", runId: run.id, n, seed, pdopMax, elements, windowS, maskDeg: getMaskDeg() });
   }
 
   function finish(message) {

@@ -50,12 +50,19 @@
   button.secondary { background: var(--bg); color: var(--text); border: 1px solid var(--line); font-weight: 500; padding: 3px 10px; }
   button.x { background: none; color: var(--muted); border: 0; padding: 0 6px; font-size: 16px; line-height: 1; font-weight: 400; }
   button.x:hover { color: var(--text); }
+  input.pick { width: 18px; height: 18px; padding: 0; border: 1px solid var(--line); border-radius: 50%; background: none; cursor: pointer; flex: none; margin: 0 6px 0 2px; }
+  input.pick::-webkit-color-swatch-wrapper { padding: 0; }
+  input.pick::-webkit-color-swatch { border: 0; border-radius: 50%; }
+  input.pick::-moz-color-swatch { border: 0; border-radius: 50%; }
   .swatch { display: inline-block; width: 11px; height: 11px; border-radius: 50%; margin: 0 6px 0 2px; vertical-align: -1px; }
   .muted { color: var(--muted); }
   .grow { flex: 1; }
   .msg { font-size: 12px; min-height: 18px; color: var(--muted); margin: 4px 0; }
   .msg.err { color: #ff8a80; }
   #tab-mc .row label:not(.chk) { width: 96px; }
+  #tab-tr .row label:not(.chk) { width: 96px; }
+  #tr-angle-num { width: 84px; flex: none; }
+  #tr-diagram { width: 100%; display: block; margin: 8px 0; }
   #tab-cs .row label { width: 118px; }
   #tab-cs .row label.chk { width: auto; }
   #tab-cs details { border-bottom: 1px solid var(--line); padding: 4px 0; }
@@ -65,7 +72,7 @@
   #tab-cs .sat-row label { flex: 1; display: flex; gap: 6px; align-items: center; }
   #tab-cs .sat-row .name { min-width: 64px; }
   .tabs { display: flex; gap: 4px; margin: 10px 0 0; border-bottom: 1px solid var(--line); }
-  .tab { background: none; color: var(--muted); border-radius: 4px 4px 0 0; padding: 6px 12px;
+  .tab { background: none; color: var(--muted); border-radius: 4px 4px 0 0; padding: 6px 8px; white-space: nowrap;
          font-weight: 500; border-bottom: 2px solid transparent; }
   .tab.active { color: var(--text); border-bottom-color: var(--accent); }
   [hidden] { display: none !important; }
@@ -109,6 +116,7 @@
       <button class="tab active" id="tab-btn-live" role="tab" aria-selected="true">Live</button>
       <button class="tab" id="tab-btn-mc" role="tab" aria-selected="false">Monte Carlo</button>
       <button class="tab" id="tab-btn-cs" role="tab" aria-selected="false">Constellation</button>
+      <button class="tab" id="tab-btn-tr" role="tab" aria-selected="false">Terrain</button>
     </div>
 
     <section id="tab-live">
@@ -259,6 +267,17 @@
       <h2>Satellites <span id="cs-count" class="muted"></span></h2>
       <div id="cs-list"></div>
       <div class="row"><button class="secondary" id="cs-reset">Reset to GPS only</button></div>
+    </section>
+    <section id="tab-tr" hidden>
+      <div class="sub">A receiver at the bottom of a cone-shaped valley: the walls rise to the same angle in every
+        direction, so any satellite lower than that angle is hidden. Used by the Live view and the Monte Carlo.
+        On the globe, sight lines to hidden satellites are drawn red and dashed.</div>
+      <div class="row"><label class="chk"><input id="tr-on" type="checkbox"> Valley / obstacles</label></div>
+      <div class="row"><label for="tr-angle">Wall angle (°)</label>
+        <input id="tr-angle" type="range" min="0" max="80" step="1" value="20" disabled>
+        <input id="tr-angle-num" type="number" min="0" max="80" step="0.5" value="20" disabled></div>
+      <svg id="tr-diagram" viewBox="0 0 300 140" role="img" aria-label="Side view of the valley"></svg>
+      <div class="msg" id="tr-msg"></div>
     </section>
   </aside>
 </main>

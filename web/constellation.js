@@ -6,8 +6,35 @@ const $ = (id) => document.getElementById(id);
 
 const MAX_SATELLITES = 300;                      // same limit as sim/api.py
 const SYSTEM_COLORS = { gps: "#3987e5", galileo: "#eda100", beidou: "#d55181" };
-// colours for satellites you add (one per added group), chosen by eye to differ from the three above
-const CUSTOM_COLORS = ["#e66767", "#9ccc65", "#b39ddb", "#ffb74d"];
+
+// ---- colours -------------------------------------------------------------------------------------------
+// New groups (and new single satellites) get a random hue at fixed saturation and lightness, so they stay
+// bright on the dark background. To keep them easy to tell apart, the hue is drawn at random among the
+// candidate hues that are farthest from the hues already in use.
+function hexFromHsl(h, s, l) {
+  const f = (n) => {
+    const k = (n + h / 30) % 12, a = s * Math.min(l, 1 - l);
+    return Math.round(255 * (l - a * Math.max(-1, Math.min(k - 3, 9 - k, 1)))).toString(16).padStart(2, "0");
+  };
+  return `#${f(0)}${f(8)}${f(4)}`;
+}
+function hueOf(hex) {
+  const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255);
+  const max = Math.max(r, g, b), min = Math.min(r, g, b), d = max - min;
+  if (d === 0) return null;                                   // grey: no hue
+  const h = max === r ? ((g - b) / d) % 6 : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
+  return (h * 60 + 360) % 360;
+}
+const hueGap = (a, b) => Math.min(Math.abs(a - b), 360 - Math.abs(a - b));
+export function randomColor(usedColors) {
+  const used = usedColors.map(hueOf).filter((h) => h !== null);
+  const offset = Math.random() * 10;
+  const candidates = Array.from({ length: 36 }, (_, k) => (k * 10 + offset) % 360)
+    .map((h) => ({ h, gap: used.length ? Math.min(...used.map((u) => hueGap(h, u))) : 180 }));
+  const best = Math.max(...candidates.map((c) => c.gap));
+  const good = candidates.filter((c) => c.gap >= 0.8 * best);      // the farthest few, then pick one at random
+  return hexFromHsl(good[Math.floor(Math.random() * good.length)].h, 0.7, 0.6);
+}
 
 const nf = (x, d = 0) => x.toLocaleString(undefined, { minimumFractionDigits: d, maximumFractionDigits: d });
 const hm = (s) => `${Math.floor(s / 3600)} h ${Math.round((s % 3600) / 60)} min`;
@@ -20,14 +47,15 @@ const escapeHtml = (s) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt
 export function initConstellation(api, hooks) {
   const presetList = JSON.parse(api.preset_info());
   let groups = [];                // {id, label, color, preset (key) | null}
-  let sats = [];                  // {label, group (id), enabled, elements}
-  let nextGroupId = 1, nextColor = 0, customCount = 0, walkerCount = 0, customGroupId = null;
+  let sats = [];                  // {label, group (id), enabled, elements, color (own colour, or null = the group's)}
+  let nextGroupId = 1, customCount = 0, walkerCount = 0, customGroupId = null;
   let locked = false;             // true while a Monte Carlo run is using the constellation: no changes
   const openGroups = new Set();
 
   const groupOf = (s) => groups.find((g) => g.id === s.group);
-  const colorOf = (s) => groupOf(s).color;
-  const customColor = () => CUSTOM_COLORS[nextColor++ % CUSTOM_COLORS.length];
+  const colorOf = (s) => s.color || groupOf(s).color;
+  const usedColors = () => [...groups.map((g) => g.color), ...sats.filter((s) => s.color).map((s) => s.color)];
+  const newColor = (chosen) => chosen || randomColor(usedColors());
 
   // ---- changing the constellation -----------------------------------------------------------
   function sync() {
@@ -60,7 +88,7 @@ export function initConstellation(api, hooks) {
     room(data.elements.length);
     const group = { id: nextGroupId++, label: info.label, color: SYSTEM_COLORS[info.system], preset: key };
     groups.push(group);
-    data.elements.forEach((elements, i) => sats.push({ label: `${info.short}-${data.names[i]}`, group: group.id, enabled: true, elements }));
+    data.elements.forEach((elements, i) => sats.push({ label: `${info.short}-${data.names[i]}`, group: group.id, enabled: true, elements, color: null }));
     changed();
   }
 
@@ -72,26 +100,29 @@ export function initConstellation(api, hooks) {
     changed();
   }
 
-  function addCustomSatellite(elements) {
+  // Each added single satellite gets its own colour (random unless one was chosen).
+  function addCustomSatellite(elements, chosenColor = null) {
     if (locked) return "";
     room(1);
+    const color = newColor(chosenColor);
     if (customGroupId === null || !groups.some((g) => g.id === customGroupId)) {
       customGroupId = nextGroupId++;
-      groups.push({ id: customGroupId, label: "Added satellites", color: customColor(), preset: null });
+      groups.push({ id: customGroupId, label: "Added satellites", color, preset: null });
     }
     customCount += 1;
-    sats.push({ label: `X${customCount}`, group: customGroupId, enabled: true, elements });
+    sats.push({ label: `X${customCount}`, group: customGroupId, enabled: true, elements, color });
     changed();
     return `X${customCount}`;
   }
 
-  function addWalker(T, P, F, data) {
+  // A new Walker set is one group in one colour (random unless one was chosen).
+  function addWalker(T, P, F, data, chosenColor = null) {
     if (locked) return;
     room(data.elements.length);
     walkerCount += 1;
-    const group = { id: nextGroupId++, label: `Walker ${T}/${P}/${F} (#${walkerCount})`, color: customColor(), preset: null };
+    const group = { id: nextGroupId++, label: `Walker ${T}/${P}/${F} (#${walkerCount})`, color: newColor(chosenColor), preset: null };
     groups.push(group);
-    data.elements.forEach((elements, i) => sats.push({ label: `W${walkerCount}-${data.names[i]}`, group: group.id, enabled: true, elements }));
+    data.elements.forEach((elements, i) => sats.push({ label: `W${walkerCount}-${data.names[i]}`, group: group.id, enabled: true, elements, color: null }));
     changed();
   }
 
@@ -113,9 +144,26 @@ export function initConstellation(api, hooks) {
     changed();
   }
 
+  // Colour pickers: a group's colour applies to all its satellites (their own colours are cleared);
+  // a satellite's colour applies to that satellite only. `live` = while the picker is still open:
+  // update the globe and plots but do not redraw the list (that would close the picker).
+  function setGroupColor(id, color, live) {
+    if (locked) return;
+    const g = groups.find((x) => x.id === id);
+    if (!g) return;
+    g.color = color;
+    sats.forEach((s) => { if (s.group === id) s.color = null; });
+    live ? (sync(), hooks.onChange()) : changed();
+  }
+  function setSatColor(i, color, live) {
+    if (locked || !sats[i]) return;
+    sats[i].color = color;
+    live ? (sync(), hooks.onChange()) : changed();
+  }
+
   function reset() {
     if (locked) return;
-    groups = []; sats = []; customGroupId = null; customCount = 0; walkerCount = 0; nextColor = 0;
+    groups = []; sats = []; customGroupId = null; customCount = 0; walkerCount = 0;
     addPreset("gps");
   }
 
@@ -132,7 +180,8 @@ export function initConstellation(api, hooks) {
   function renderPresets() {
     $("cs-presets").innerHTML = presetList.map((p) => {
       const present = groups.some((g) => g.preset === p.key);
-      return `<div class="row preset"><span class="swatch" style="background:${SYSTEM_COLORS[p.system]}"></span>` +
+      const g = groups.find((x) => x.preset === p.key);
+      return `<div class="row preset"><span class="swatch" style="background:${g ? g.color : SYSTEM_COLORS[p.system]}"></span>` +
              `<span class="grow">${escapeHtml(p.label)} <span class="muted">(${p.count})</span></span>` +
              `<button class="secondary" data-act="preset" data-key="${p.key}">${present ? "Remove" : "Add"}</button></div>`;
     }).join("");
@@ -149,13 +198,15 @@ export function initConstellation(api, hooks) {
       const on = members.filter(({ s }) => s.enabled).length;
       const custom = g.preset === null;
       const items = members.map(({ s, i }) =>
-        `<div class="sat-row"><label><input type="checkbox" data-act="sat-toggle" data-i="${i}" ${s.enabled ? "checked" : ""}> ` +
+        `<div class="sat-row"><input type="color" class="pick" data-act="sat-color" data-i="${i}" value="${colorOf(s)}" title="Colour of ${escapeHtml(s.label)}" aria-label="Colour of ${escapeHtml(s.label)}">` +
+        `<label><input type="checkbox" data-act="sat-toggle" data-i="${i}" ${s.enabled ? "checked" : ""}> ` +
         `<span class="name">${escapeHtml(s.label)}</span> <span class="muted">${describe(s)}</span></label>` +
         (custom ? `<button class="x" data-act="sat-del" data-i="${i}" title="Delete this satellite" aria-label="Delete ${escapeHtml(s.label)}">×</button>` : "") +
         `</div>`).join("");
       return `<details data-g="${g.id}" ${openGroups.has(g.id) ? "open" : ""}><summary>` +
              `<input type="checkbox" data-act="grp-toggle" data-g="${g.id}" ${on === members.length ? "checked" : ""} aria-label="Switch ${escapeHtml(g.label)} on or off"> ` +
-             `<span class="swatch" style="background:${g.color}"></span>${escapeHtml(g.label)} <span class="muted">${on}/${members.length}</span>` +
+             `<input type="color" class="pick" data-act="grp-color" data-g="${g.id}" value="${g.color}" title="Colour of the whole group" aria-label="Colour of ${escapeHtml(g.label)}">` +
+             `${escapeHtml(g.label)} <span class="muted">${on}/${members.length}</span>` +
              `<button class="x" data-act="grp-del" data-g="${g.id}" title="Remove this whole group" aria-label="Remove ${escapeHtml(g.label)}">×</button>` +
              `</summary>${items}</details>`;
     }).join("");
@@ -197,6 +248,13 @@ export function initConstellation(api, hooks) {
     const t = e.target;
     if (t.dataset.act === "sat-toggle") toggleSat(+t.dataset.i);
     else if (t.dataset.act === "grp-toggle") setGroupEnabled(+t.dataset.g, t.checked);
+    else if (t.dataset.act === "grp-color") setGroupColor(+t.dataset.g, t.value, false);
+    else if (t.dataset.act === "sat-color") setSatColor(+t.dataset.i, t.value, false);
+  });
+  $("cs-list").addEventListener("input", (e) => {                // dragging inside an open colour picker
+    const t = e.target;
+    if (t.dataset.act === "grp-color") setGroupColor(+t.dataset.g, t.value, true);
+    else if (t.dataset.act === "sat-color") setSatColor(+t.dataset.i, t.value, true);
   });
   $("cs-list").addEventListener("click", (e) => {
     const b = e.target.closest("button[data-act]");
@@ -268,5 +326,6 @@ export function initConstellation(api, hooks) {
   updateSatelliteForm();
   updateWalkerForm();
 
-  return { addPreset, toggleSat, setLocked, decorate, activeElements, count: () => sats.length };
+  return { addPreset, addCustomSatellite, addWalker, toggleSat, setLocked, decorate, activeElements, count: () => sats.length,
+           groupColors: () => groups.map((g) => ({ label: g.label, color: g.color })) };
 }
