@@ -94,6 +94,20 @@ def set_constellation(elements_json, enabled_json):
     return json.dumps({"paths": paths, "ring_of": ring_of})
 
 
+def common_period(elements_json):
+    """The approximate least common multiple of the orbital periods of these satellites (see
+    constellation.approx_common_period). Returns {"found": true, "days", "seconds", "mismatch_deg"},
+    where mismatch_deg is the worst phase error after that time, or {"found": false, "reason"}."""
+    elements = np.array(json.loads(elements_json), dtype=float).reshape(-1, 6)
+    if len(elements) == 0:
+        return json.dumps({"found": False, "reason": "there are no satellites"})
+    result = constellation.approx_common_period(constellation.period(elements[:, constellation.A]))
+    if result is None:
+        return json.dumps({"found": False, "reason": f"no common period within {constellation.LCM_MAX_DAYS // 365} years"})
+    seconds, mismatch_cycles = result
+    return json.dumps({"found": True, "days": seconds / 86400.0, "seconds": seconds, "mismatch_deg": 360.0 * mismatch_cycles})
+
+
 def preset_info():
     """The ready-made constellations: key, label, label prefix, system, number of satellites."""
     return json.dumps([{"key": key, "label": p["label"], "short": p["short"], "system": p["system"],

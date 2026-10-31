@@ -197,12 +197,12 @@ def mc_start(n, seed, pdop_max, mask_deg=0.0, elements_json=None, window_s=DEFAU
 
 
 def mc_advance(k, want_points=False):
-    """Do the next k trials. With want_points, also return where they were and their PDOP."""
+    """Do the next k trials. With want_points, also return where and when they were, and their PDOP."""
     s = _run.advance(k)
     out = {"done": _run.done, "n": _run.n}
     if want_points:
         out["points"] = {
-            "lat": _run.lat[s].tolist(), "lon": _run.lon[s].tolist(),
+            "lat": _run.lat[s].tolist(), "lon": _run.lon[s].tolist(), "t": _run.t[s].tolist(),
             "pdop": _nan_to_none(_run.dop["pdop"][s]),
             "n_visible": _run.n_visible[s].tolist(),
         }

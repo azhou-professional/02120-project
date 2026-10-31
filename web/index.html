@@ -55,6 +55,7 @@
   .grow { flex: 1; }
   .msg { font-size: 12px; min-height: 18px; color: var(--muted); margin: 4px 0; }
   .msg.err { color: #ff8a80; }
+  #tab-mc .row label:not(.chk) { width: 96px; }
   #tab-cs .row label { width: 118px; }
   #tab-cs .row label.chk { width: auto; }
   #tab-cs details { border-bottom: 1px solid var(--line); padding: 4px 0; }
@@ -111,6 +112,7 @@
     </div>
 
     <section id="tab-live">
+    <div class="msg" id="live-lock-note" hidden></div>
     <h2>Receiver</h2>
     <div class="row"><label for="lat">Lat (°)</label><input id="lat" type="number" step="0.1" min="-90" max="90" value="40.44"></div>
     <div class="row"><label for="lon">Lon (°)</label><input id="lon" type="number" step="0.1" min="-180" max="180" value="-79.94"></div>
@@ -162,6 +164,9 @@
       <div class="row"><label for="mc-dop">Plot</label>
         <select id="mc-dop"><option value="gdop">GDOP</option><option value="pdop" selected>PDOP</option>
           <option value="hdop">HDOP</option><option value="vdop">VDOP</option><option value="tdop">TDOP</option></select></div>
+      <div class="row"><label for="mc-window">Window (days)</label><input id="mc-window" type="number" min="0.01" max="36500" step="any" value="365"></div>
+      <div class="row"><label class="chk"><input id="mc-lcm" type="checkbox"> Use the common repeat period of the satellites (approximate LCM)</label></div>
+      <div class="msg" id="mc-window-info"></div>
 
       <h2>Show trials on the globe</h2>
       <div class="row"><label class="chk"><input id="mc-viz" type="checkbox"> Visualize trials (each flash lasts 0.5 s)</label></div>
@@ -207,6 +212,7 @@
     </section>
 
     <section id="tab-cs" hidden>
+      <div class="msg err" id="cs-lock-note" hidden>Locked while a Monte Carlo run is in progress.</div>
       <div class="sub">The satellites used everywhere: the Live tab, the sky plot and the Monte Carlo. All of them share one receiver clock, so any 4 in view give a position fix. Click a satellite on the globe to switch it off or on.</div>
 
       <h2>Constellations</h2>

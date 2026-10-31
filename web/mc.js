@@ -8,7 +8,7 @@ const MAX_VIZ_CHUNK = 4000;   // cap on trials per request when visualizing
 const SUMMARY_MS = 250;       // how often the running summary is refreshed
 const MAX_TRIALS = 1_000_000;
 const MIN_RATE = 1, MAX_RATE = 2000;
-const DEFAULT_WINDOW_S = 365 * 86400;   // random times are drawn from one year (the window control comes in the next step)
+const DEFAULT_WINDOW_DAYS = 365, MIN_WINDOW_DAYS = 0.01, MAX_WINDOW_DAYS = 36500;   // random times are drawn from [0, window)
 const BAR = "#3987e5", BAR_FEW = UNDEFINED_RGB;  // bars with >= 4 satellites / fewer than 4
 
 const $ = (id) => document.getElementById(id);
@@ -16,8 +16,12 @@ const pct = (x, d = 2) => `${(100 * x).toFixed(d)} %`;
 const f = (x, d = 2) => (x === null || x === undefined ? "–" : x.toFixed(d));
 
 // getElements(): the elements table (rows of 6 numbers) of the satellites that are switched on
-export function initMonteCarlo(globe, getElements) {
+// api: the page's Python (for the common repeat period of the satellites)
+// onRunState(running): a run started or ended (the page locks its time and receiver controls while it runs)
+// onFeatured({lat, lon, t}): about once a second of a visualized run, one trial to show in the live view
+export function initMonteCarlo(globe, { getElements, api, onRunState, onFeatured }) {
   let worker = null, ready = false, runCounter = 0, run = null, lastSummary = null;
+  let lcm = { found: false, reason: "not computed yet" };    // approximate LCM of the periods (from Python)
 
   // ---- worker ------------------------------------------------------------------------
   function ensureWorker() {
@@ -48,7 +52,10 @@ export function initMonteCarlo(globe, getElements) {
       run.inflight = false;
       run.done = m.done;
       $("mc-progress").value = m.done / run.n;
-      if (m.points) globe.spawnTrials(m.points, Math.max(run.lastSpawn, now - 250), now, run.pdopMax);
+      if (m.points) {
+        globe.spawnTrials(m.points, Math.max(run.lastSpawn, now - 250), now, run.pdopMax);
+        featureOneTrial(m);
+      }
       run.lastSpawn = now;
       if (m.summary) render(m.summary);
       if (m.done >= run.n && !run.finished) finish("Done.");
@@ -56,6 +63,46 @@ export function initMonteCarlo(globe, getElements) {
       render(m.summary);
     }
   }
+
+  // Every n-th trial (n = trials per second, so about one a second) is the "featured" trial: the live
+  // view (satellites, Earth angle, receiver, sky plot, timeline) jumps to that trial's place and time.
+  // The very first trial is featured too, so the view responds as soon as the run starts.
+  function featureOneTrial(m) {
+    const k = m.points.lat.length, first = m.done - k;
+    const rate = Math.round(getRate());
+    let j = -1;
+    for (let idx = k - 1; idx >= 0; idx--) if ((first + idx + 1) % rate === 0) { j = idx; break; }
+    if (j < 0 && first === 0) j = 0;
+    if (j >= 0) onFeatured({ lat: m.points.lat[j], lon: m.points.lon[j], t: m.points.t[j], index: first + j + 1 });
+  }
+
+  // ---- the time window ---------------------------------------------------------------------
+  // Random times are drawn from [0, window). The window is typed in (days), or, with the checkbox on,
+  // it is the approximate least common multiple of the satellites' orbital periods (computed in Python):
+  // the time after which the whole constellation looks the same again.
+  const useLcm = () => $("mc-lcm").checked && lcm.found;
+
+  function windowSeconds() {
+    if (useLcm()) return lcm.seconds;
+    const days = parseFloat($("mc-window").value);
+    return 86400 * (Number.isFinite(days) ? Math.min(MAX_WINDOW_DAYS, Math.max(MIN_WINDOW_DAYS, days)) : DEFAULT_WINDOW_DAYS);
+  }
+
+  function refreshWindow() {
+    const elements = getElements();
+    lcm = elements.length > 0 ? JSON.parse(api.common_period(JSON.stringify(elements)))
+                              : { found: false, reason: "no satellites are switched on" };
+    const running = run && !run.finished;
+    $("mc-window").disabled = running || useLcm();
+    if (useLcm()) $("mc-window").value = String(+lcm.days.toFixed(4));
+    const days = windowSeconds() / 86400;
+    $("mc-window-info").textContent = lcm.found
+      ? `Common repeat period ${f(lcm.days, 2)} days (worst phase mismatch ${f(lcm.mismatch_deg, 1)}°). ` +
+        `The window is ${f(days / lcm.days, 2)} repeat cycles.`
+      : `No common repeat period: ${lcm.reason}.${$("mc-lcm").checked ? " Using the typed window." : ""}`;
+  }
+  $("mc-lcm").addEventListener("change", refreshWindow);
+  $("mc-window").addEventListener("input", refreshWindow);
 
   // ---- run control ---------------------------------------------------------------------
   function startRun() {
@@ -73,6 +120,9 @@ export function initMonteCarlo(globe, getElements) {
       return;
     }
 
+    refreshWindow();                                        // the constellation may have changed since the last look
+    const windowS = windowSeconds();
+
     const now = performance.now();
     run = { id: ++runCounter, n, pdopMax, started: false, done: 0, inflight: false, finished: false,
             carry: 0, lastT: now, lastSpawn: now, lastSummaryAt: 0 };
@@ -81,7 +131,7 @@ export function initMonteCarlo(globe, getElements) {
     $("mc-progress").value = 0;
     setRunning(true);
     $("mc-status").textContent = "Starting…";
-    worker.postMessage({ cmd: "start", runId: run.id, n, seed, pdopMax, elements, windowS: DEFAULT_WINDOW_S });
+    worker.postMessage({ cmd: "start", runId: run.id, n, seed, pdopMax, elements, windowS });
   }
 
   function finish(message) {
@@ -97,7 +147,9 @@ export function initMonteCarlo(globe, getElements) {
 
   function setRunning(running) {
     $("mc-run").textContent = running ? "Cancel" : "Run";
-    for (const id of ["mc-n", "mc-preset", "mc-seed", "mc-pdop"]) $(id).disabled = running;
+    for (const id of ["mc-n", "mc-preset", "mc-seed", "mc-pdop", "mc-window", "mc-lcm"]) $(id).disabled = running;
+    onRunState(running);
+    if (!running) refreshWindow();                           // the window box stays locked if "common period" is on
   }
 
   // Pacing loop. Without visualization: back-to-back big chunks (as fast as the worker goes).
@@ -245,5 +297,5 @@ export function initMonteCarlo(globe, getElements) {
   }
 
   // charts drawn while the tab was hidden have zero width, so the tab redraws them when shown
-  return { ensureWorker, redraw: () => { if (lastSummary) render(lastSummary); } };
+  return { ensureWorker, refreshWindow, redraw: () => { if (lastSummary) render(lastSummary); } };
 }
