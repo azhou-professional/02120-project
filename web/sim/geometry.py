@@ -82,6 +82,19 @@ def lat_lon(positions, t=0.0):
     return np.degrees(np.arcsin(p[..., 2] / r)), (lon + 180.0) % 360.0 - 180.0
 
 
+def blocking_angle(az_deg, terrain):
+    """Elevation (degrees) below which the terrain around the receiver hides the sky, in the direction
+    az_deg (same shape as az_deg). terrain is None (open sky) or {"type": "cone", "angle_deg": e}: a
+    receiver at the bottom of a cone-shaped valley, whose walls rise to e degrees in every direction.
+    (Other shapes would make this depend on the azimuth.)"""
+    az = np.asarray(az_deg, dtype=float)
+    if not terrain:
+        return np.zeros_like(az)
+    if terrain.get("type") == "cone":
+        return np.full_like(az, float(terrain["angle_deg"]))
+    raise ValueError(f"unknown terrain type {terrain.get('type')!r}")
+
+
 def look_angles(rx, sat_positions, enu):
     """Azimuth, elevation and line-of-sight unit vectors from receiver(s) to satellites.
 

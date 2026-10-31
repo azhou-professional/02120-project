@@ -67,6 +67,16 @@ export function createGlobe(container, onPick, onHover, land, onSatClick) {
   los.frustumCulled = false;   // its points change every update; the initial bounding sphere would be wrong
   scene.add(los);
 
+  // Sight lines to satellites above the horizon but hidden by the terrain (red, dashed)
+  const blockedGeom = new THREE.BufferGeometry();
+  blockedGeom.setAttribute("position", new THREE.BufferAttribute(new Float32Array(6), 3));
+  blockedGeom.setDrawRange(0, 0);
+  const blockedLos = new THREE.LineSegments(blockedGeom,
+    new THREE.LineDashedMaterial({ color: 0xff5252, dashSize: 0.08, gapSize: 0.06, transparent: true, opacity: 0.8 }));
+  blockedLos.frustumCulled = false;
+  scene.add(blockedLos);
+  let blockedCount = 0;                     // how many dashed lines are drawn (for tests)
+
   // ---- Monte-Carlo trial dots -------------------------------------------------------
   // Each trial appears as a big flash in its PDOP colour that, over FLASH_S seconds, shrinks and
   // darkens (colour x FADE); it is then copied into a permanent layer of small dark dots. The
@@ -257,6 +267,8 @@ export function createGlobe(container, onPick, onHover, land, onSatClick) {
     visible = c.colors.map(() => false);
     losGeom.setAttribute("position", new THREE.BufferAttribute(new Float32Array(Math.max(1, c.colors.length) * 6), 3));
     losGeom.setDrawRange(0, 0);
+    blockedGeom.setAttribute("position", new THREE.BufferAttribute(new Float32Array(Math.max(1, c.colors.length) * 6), 3));
+    blockedGeom.setDrawRange(0, 0);
     hovered = -1; lastReported = null; clickCandidate = -1;
     applyHighlight();
   }
@@ -270,8 +282,8 @@ export function createGlobe(container, onPick, onHover, land, onSatClick) {
     const rx = toScene(snap.receiver);
     receiver.position.copy(rx);
 
-    const buf = losGeom.attributes.position.array;
-    let k = 0;
+    const buf = losGeom.attributes.position.array, bbuf = blockedGeom.attributes.position.array;
+    let k = 0, kb = 0;
     snap.sat_positions.forEach((p, i) => {
       const pos = toScene(p);
       sats[i].position.copy(pos);
@@ -280,10 +292,17 @@ export function createGlobe(container, onPick, onHover, land, onSatClick) {
       if (visible[i]) {
         buf.set([rx.x, rx.y, rx.z, pos.x, pos.y, pos.z], k);
         k += 6;
+      } else if (snap.blocked[i]) {                              // above the horizon, hidden by the valley walls
+        bbuf.set([rx.x, rx.y, rx.z, pos.x, pos.y, pos.z], kb);
+        kb += 6;
       }
     });
     losGeom.attributes.position.needsUpdate = true;
     losGeom.setDrawRange(0, k / 3);
+    blockedGeom.attributes.position.needsUpdate = true;
+    blockedGeom.setDrawRange(0, kb / 3);
+    blockedLos.computeLineDistances();                             // dashes need the distance along each line
+    blockedCount = kb / 6;
   }
 
   // Click (not drag) on the Earth -> report latitude/longitude
@@ -343,7 +362,8 @@ export function createGlobe(container, onPick, onHover, land, onSatClick) {
     return { x: (ndc.x * 0.5 + 0.5) * container.clientWidth, y: (-ndc.y * 0.5 + 0.5) * container.clientHeight };
   }
 
-  return { update, setConstellation, spawnTrials, clearTrials, screenOf };
+  return { update, setConstellation, spawnTrials, clearTrials, screenOf, blockedLines: () => blockedCount,
+           satColor: (i) => `#${sats[i].material.color.getHexString()}` };
 }
 
 function addGraticule(scene) {

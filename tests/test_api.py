@@ -31,6 +31,7 @@ def snap(lat=40.44, lon=-79.94, t=1000.0, mask=0.0):
 def back_to_gps():
     yield
     load("gps")
+    api.set_terrain("null")
 
 
 # ---- switching satellites off ---------------------------------------------------------------
@@ -279,3 +280,76 @@ def test_window_spread_does_not_change_the_answer_for_a_mixed_constellation():
     print("median PDOP by window:", [round(x, 3) for x in medians])
     assert max(medians) - min(medians) < 0.02
     assert max(means) - min(means) < 0.15
+
+
+# ---- Stage 4: terrain (a cone-shaped valley around the receiver) -----------------------------------------
+
+def cone(angle):
+    return api.set_terrain(json.dumps({"type": "cone", "angle_deg": angle}))
+
+
+@pytest.mark.parametrize("angle", [10.0, 25.0, 40.0])
+def test_cone_is_the_same_as_an_elevation_mask(angle):
+    """A cone blocks the same angle in every direction, so it must give exactly what a mask gives."""
+    load("gps", "galileo")
+    for lat, lon, t in [(40.44, -79.94, 1000.0), (-33.9, 151.2, 5e5), (70.0, 20.0, 2e6)]:
+        api.set_terrain("null")
+        masked = snap(lat, lon, t, mask=angle)
+        cone(angle)
+        coned = snap(lat, lon, t)
+        assert coned["visible"] == masked["visible"] and coned["dop"] == masked["dop"]
+        assert coned["mask_deg"] == angle
+
+
+def test_blocked_means_above_the_horizon_but_below_the_walls():
+    load("gps", "galileo")
+    cone(30.0)
+    s = snap()
+    for el, on, vis, blk in zip(s["el"], s["enabled"], s["visible"], s["blocked"]):
+        assert blk == (on and 0.0 <= el < 30.0)
+        assert vis == (on and el >= 30.0)
+    assert any(s["blocked"])                                   # some satellites really are hidden
+
+
+def test_switched_off_satellites_are_never_blocked():
+    el = load("gps")
+    load("gps", enabled=[False] * 24)
+    cone(30.0)
+    s = snap()
+    assert not any(s["blocked"]) and s["n_visible"] == 0
+
+
+def test_terrain_validation():
+    with pytest.raises(ValueError):
+        cone(85.0)
+    with pytest.raises(ValueError):
+        cone(-1.0)
+    with pytest.raises(ValueError):
+        api.set_terrain(json.dumps({"type": "canyon", "angle_deg": 10}))
+    assert json.loads(api.set_terrain("null")) is None
+
+
+def test_monte_carlo_in_a_20_degree_valley_matches_the_analytic_mean():
+    """The cap formula with mask e (README A13) gives the expected number in view in a cone of e."""
+    n = 150_000
+    run = mc.MonteCarlo(n, seed=21, mask_deg=20.0)
+    run.advance(n)
+    se = run.n_visible.std(ddof=1) / math.sqrt(n)
+    expected = mc.expected_mean_visible(presets.gps(), 20.0)
+    assert abs(run.n_visible.mean() - expected) < 4 * se, (run.n_visible.mean(), expected)
+
+
+def test_deeper_valleys_see_fewer_satellites_and_position_worse():
+    """GPS alone: as the walls get steeper, the mean number in view and the availability can only fall,
+    and the median PDOP rises."""
+    means, avail, med = [], [], []
+    for angle in (0.0, 10.0, 20.0, 30.0, 40.0):
+        run = mc.MonteCarlo(30_000, seed=4, mask_deg=angle)    # same seed: the same places and times each time
+        run.advance(30_000)
+        s = run.summary("pdop")
+        means.append(s["nsat"]["mean"]); avail.append(s["availability"]["p"]); med.append(s["dop"]["median"])
+    print("valley angle 0-40: mean in view", [round(x, 2) for x in means], "availability", [round(x, 3) for x in avail],
+          "median PDOP", [round(x, 2) for x in med])
+    assert all(a > b for a, b in zip(means, means[1:]))
+    assert all(a >= b for a, b in zip(avail, avail[1:])) and avail[-1] < avail[0]
+    assert all(a < b for a, b in zip(med, med[1:]))

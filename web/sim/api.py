@@ -18,7 +18,8 @@ MAX_WALKER_SATELLITES = 120  # largest single Walker set
 
 # The constellation snapshot() works on: an elements table and, for each satellite, whether it is
 # switched on. Switched-off satellites are drawn as ghosts but do not count for visibility or DOP.
-_state = {"elements": presets.gps(), "enabled": np.ones(24, dtype=bool)}
+_state = {"elements": presets.gps(), "enabled": np.ones(24, dtype=bool), "terrain": None}
+MAX_TERRAIN_DEG = 80.0       # steepest valley wall allowed
 
 
 def _clean(x):
@@ -35,14 +36,18 @@ def snapshot(lat_deg, lon_deg, t_seconds, mask_deg=DEFAULT_MASK_DEG):
     rx = geometry.receiver_position(lat_deg, lon_deg, t_seconds)   # inertial position: the Earth turns
     enu = geometry.enu_basis(lat_deg, lon_deg, t_seconds)
     az, el, unit = geometry.look_angles(rx, sat, enu)
-    visible = (el >= mask_deg) & enabled                            # switched-off satellites never count
+    # usable: switched on and above both the mask and the terrain in its direction
+    limit = np.maximum(mask_deg, geometry.blocking_angle(az, _state["terrain"]))
+    visible = (el >= limit) & enabled
+    blocked = enabled & (el >= mask_deg) & ~visible                 # above the horizon but hidden by the terrain
 
     values = dop(unit[visible], enu)
     sat_lat, sat_lon = geometry.lat_lon(sat, t_seconds)             # Earth-fixed point below each satellite
     return json.dumps({
         "t": t_seconds,
         "earth_angle_deg": float(geometry.earth_angle_deg(t_seconds)),
-        "mask_deg": mask_deg,
+        "mask_deg": float(np.max(limit)) if len(limit) else float(mask_deg),   # for a cone: the cone angle
+        "terrain": _state["terrain"],
         "receiver": rx.tolist(),
         # orbit information shown in the satellite hover tooltip
         "r_earth_km": geometry.R_EARTH,
@@ -61,6 +66,7 @@ def snapshot(lat_deg, lon_deg, t_seconds, mask_deg=DEFAULT_MASK_DEG):
         "el": el.tolist(),
         "enabled": enabled.tolist(),
         "visible": visible.tolist(),
+        "blocked": blocked.tolist(),
         "n_visible": int(visible.sum()),
         "dop": {k: _clean(v) for k, v in values.items()},
     })
@@ -79,6 +85,20 @@ def orbit_paths(elements, n=181):
             paths.append(constellation.orbit_path(row, n).tolist())
         ring_of.append(index[key])
     return paths, ring_of
+
+
+def set_terrain(terrain_json):
+    """Set the terrain around the receiver: "null" for open sky or {"type": "cone", "angle_deg": e}."""
+    terrain = json.loads(terrain_json)
+    if terrain is not None:
+        if terrain.get("type") != "cone":
+            raise ValueError("only the cone terrain is available")
+        angle = float(terrain["angle_deg"])
+        if not 0.0 <= angle <= MAX_TERRAIN_DEG:
+            raise ValueError(f"the blocking angle must be between 0 and {MAX_TERRAIN_DEG:.0f} degrees")
+        terrain = {"type": "cone", "angle_deg": angle}
+    _state["terrain"] = terrain
+    return json.dumps(terrain)
 
 
 def set_constellation(elements_json, enabled_json):
