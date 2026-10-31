@@ -149,7 +149,7 @@ def test_summary_matches_hand_calculation():
 def test_partial_run_summary_and_json_entry_points():
     import json
     start = json.loads(mc.mc_start(5000, 11, 6.0))
-    assert start == {"n": 5000, "seed": 11}
+    assert start == {"n": 5000, "seed": 11, "window_days": 365.0}
     adv = json.loads(mc.mc_advance(1200, True))
     assert adv["done"] == 1200 and len(adv["points"]["lat"]) == 1200
     s = json.loads(mc.mc_summary("gdop"))

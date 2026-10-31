@@ -1,7 +1,6 @@
 // 3D view (Three.js). Draws what Python computed; no orbital or DOP math happens here.
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
-import { PLANE_COLORS } from "./skyplot.js";
 import { trialColor, rgb01, FADE } from "./trialcolors.js";
 import { buildEarthGeometry } from "./earth.js";
 
@@ -14,7 +13,8 @@ const toScene = (p) => new THREE.Vector3(p[0] * K, p[2] * K, -p[1] * K);
 // onPick(lat, lon): the Earth was clicked.
 // onHover(i, x, y): satellite i (or -1 for none) is under the mouse, at (x, y) pixels inside the container.
 // land: the land/ocean grid from earth.js (or null for a plain sphere).
-export function createGlobe(container, onPick, onHover, land) {
+// onSatClick(i): satellite i was clicked (to switch it off or on).
+export function createGlobe(container, onPick, onHover, land, onSatClick) {
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(45, 1, 0.01, 100);
   camera.position.set(6, 4, 9);
@@ -59,9 +59,10 @@ export function createGlobe(container, onPick, onHover, land) {
     new THREE.SphereGeometry(0.025, 16, 12), new THREE.MeshBasicMaterial({ color: 0xff3b30 }));
   scene.add(receiver);
 
-  // Line-of-sight lines to visible satellites
+  // Line-of-sight lines to visible satellites (the buffer is sized for the constellation in setConstellation)
   const losGeom = new THREE.BufferGeometry();
-  losGeom.setAttribute("position", new THREE.BufferAttribute(new Float32Array(24 * 2 * 3), 3));
+  losGeom.setAttribute("position", new THREE.BufferAttribute(new Float32Array(6), 3));
+  losGeom.setDrawRange(0, 0);
   const los = new THREE.LineSegments(losGeom, new THREE.LineBasicMaterial({ color: 0x7CFC9A, transparent: true, opacity: 0.6 }));
   los.frustumCulled = false;   // its points change every update; the initial bounding sphere would be wrong
   scene.add(los);
@@ -177,9 +178,17 @@ export function createGlobe(container, onPick, onHover, land) {
     while (head < tail && now - flashBirth[head % CAP_FLASH] >= FLASH_S) retireOldest();
   }
 
-  let sats = [];     // created on first update, once we know how many satellites there are
-  let planes = [];   // plane index of each satellite (from the last update)
-  let visible = [];  // whether each satellite is above the mask (from the last update)
+  // ---- the constellation: satellites and orbit rings -----------------------------------------
+  // setConstellation() (below) builds one sphere per satellite and one ring per distinct orbit.
+  // Satellites that are switched off are drawn as faint ghosts; a ring is drawn faintly too if
+  // every satellite on it is switched off.
+  const satGeometry = new THREE.SphereGeometry(0.045, 16, 12);
+  let sats = [];         // one mesh per satellite
+  let ringLines = [];    // one line per distinct orbit
+  let ringOf = [];       // which ring each satellite is on
+  let ringActive = [];   // whether a ring has any switched-on satellite
+  let enabled = [];      // whether each satellite is switched on (from the last update)
+  let visible = [];      // whether each satellite is above the mask and switched on (from the last update)
 
   // ---- satellite hover ----------------------------------------------------------------
   // The satellite under the mouse is found in screen space: the nearest satellite within
@@ -187,16 +196,16 @@ export function createGlobe(container, onPick, onHover, land) {
   // highlighted (the other rings dim) and the page is told so it can show a tooltip.
   const HOVER_PX = 14;
   const earthSphere = new THREE.Sphere(new THREE.Vector3(), 1);
-  let ringLines = [];
   let pointer = null;                       // mouse position in container pixels, or null
   let hovered = -1, lastReported = null;
+  let clickCandidate = -1;                  // the satellite that was under the mouse when it was pressed
 
-  function satScale(i) { return i === hovered ? 2.2 : visible[i] ? 1.3 : 0.8; }
+  function satScale(i) { return i === hovered ? 2.2 : !enabled[i] ? 0.7 : visible[i] ? 1.3 : 0.8; }
+  function satOpacity(i) { return !enabled[i] ? 0.12 : visible[i] ? 1 : 0.35; }
+  function ringOpacity(r) { return hovered >= 0 ? (r === ringOf[hovered] ? 1.0 : 0.1) : ringActive[r] ? 0.35 : 0.06; }
 
   function applyHighlight() {
-    ringLines.forEach((line, p) => {
-      line.material.opacity = hovered < 0 ? 0.35 : planes[hovered] === p ? 1.0 : 0.12;
-    });
+    ringLines.forEach((line, r) => { line.material.opacity = ringOpacity(r); });
     sats.forEach((m, i) => m.scale.setScalar(satScale(i)));
   }
 
@@ -222,26 +231,39 @@ export function createGlobe(container, onPick, onHover, land) {
     if (report !== lastReported) { lastReported = report; onHover(hovered, pointer ? pointer.x : 0, pointer ? pointer.y : 0); }
   }
 
-  function addRings(rings) {
-    ringLines = rings.map((pts, p) => {
+  /**
+   * Replace the satellites and rings.
+   *   colors: CSS colour of each satellite; ringOf: ring index of each satellite;
+   *   paths: points of each ring (inertial km); ringColors, ringActive: colour / "has a satellite switched on" per ring.
+   */
+  function setConstellation(c) {
+    sats.forEach((m) => { scene.remove(m); m.material.dispose(); });
+    ringLines.forEach((l) => { scene.remove(l); l.geometry.dispose(); l.material.dispose(); });
+    sats = c.colors.map((color) => {
+      const m = new THREE.Mesh(satGeometry, new THREE.MeshBasicMaterial({ color, transparent: true }));
+      scene.add(m);
+      return m;
+    });
+    ringLines = c.paths.map((pts, r) => {
       const line = new THREE.LineLoop(
         new THREE.BufferGeometry().setFromPoints(pts.map(toScene)),
-        new THREE.LineBasicMaterial({ color: PLANE_COLORS[p], transparent: true, opacity: 0.35 }));
+        new THREE.LineBasicMaterial({ color: c.ringColors[r], transparent: true, opacity: 0.35 }));
       scene.add(line);
       return line;
     });
+    ringOf = c.ringOf;
+    ringActive = c.ringActive;
+    enabled = c.colors.map(() => true);
+    visible = c.colors.map(() => false);
+    losGeom.setAttribute("position", new THREE.BufferAttribute(new Float32Array(Math.max(1, c.colors.length) * 6), 3));
+    losGeom.setDrawRange(0, 0);
+    hovered = -1; lastReported = null; clickCandidate = -1;
+    applyHighlight();
   }
 
   function update(snap) {
-    if (sats.length === 0) {
-      sats = snap.planes.map((plane) => {
-        const m = new THREE.Mesh(new THREE.SphereGeometry(0.045, 16, 12),
-          new THREE.MeshBasicMaterial({ color: PLANE_COLORS[plane], transparent: true }));
-        scene.add(m);
-        return m;
-      });
-    }
-    planes = snap.planes;
+    if (snap.sat_positions.length !== sats.length) return;     // the constellation just changed; the next snapshot will match
+    enabled = snap.enabled;
     visible = snap.visible;
     // Rotation about physical +z equals rotation about scene +y (the mapping toScene is a proper rotation)
     earthGroup.rotation.y = (snap.earth_angle_deg * Math.PI) / 180;
@@ -253,10 +275,9 @@ export function createGlobe(container, onPick, onHover, land) {
     snap.sat_positions.forEach((p, i) => {
       const pos = toScene(p);
       sats[i].position.copy(pos);
-      const vis = snap.visible[i];
-      sats[i].material.opacity = vis ? 1 : 0.25;
+      sats[i].material.opacity = satOpacity(i);
       sats[i].scale.setScalar(satScale(i));
-      if (vis) {
+      if (visible[i]) {
         buf.set([rx.x, rx.y, rx.z, pos.x, pos.y, pos.z], k);
         k += 6;
       }
@@ -268,7 +289,11 @@ export function createGlobe(container, onPick, onHover, land) {
   // Click (not drag) on the Earth -> report latitude/longitude
   const ray = new THREE.Raycaster();
   let down = null;
-  renderer.domElement.addEventListener("pointerdown", (e) => { down = [e.clientX, e.clientY]; pointer = null; });
+  renderer.domElement.addEventListener("pointerdown", (e) => {
+    down = [e.clientX, e.clientY];
+    clickCandidate = hovered;                                   // remember it: pressing hides the tooltip and clears `hovered`
+    pointer = null;
+  });
   renderer.domElement.addEventListener("pointermove", (e) => {
     if (e.buttons) return;                                      // dragging to rotate: no tooltip
     const r = renderer.domElement.getBoundingClientRect();
@@ -277,6 +302,12 @@ export function createGlobe(container, onPick, onHover, land) {
   renderer.domElement.addEventListener("pointerleave", () => { pointer = null; });
   renderer.domElement.addEventListener("pointerup", (e) => {
     if (!down || Math.hypot(e.clientX - down[0], e.clientY - down[1]) > 4) return;
+    if (clickCandidate >= 0) {                                  // a click on a satellite switches it off or on
+      const i = clickCandidate;
+      clickCandidate = -1;
+      onSatClick(i);
+      return;
+    }
     const r = renderer.domElement.getBoundingClientRect();
     ray.setFromCamera(new THREE.Vector2(((e.clientX - r.left) / r.width) * 2 - 1,
                                         -((e.clientY - r.top) / r.height) * 2 + 1), camera);
@@ -305,7 +336,14 @@ export function createGlobe(container, onPick, onHover, land) {
     renderer.render(scene, camera);
   });
 
-  return { update, addRings, spawnTrials, clearTrials };
+  /** Where satellite i is on screen, in pixels inside the container (for tests and debugging). */
+  function screenOf(i) {
+    camera.updateMatrixWorld();
+    const ndc = sats[i].position.clone().project(camera);
+    return { x: (ndc.x * 0.5 + 0.5) * container.clientWidth, y: (-ndc.y * 0.5 + 0.5) * container.clientHeight };
+  }
+
+  return { update, setConstellation, spawnTrials, clearTrials, screenOf };
 }
 
 function addGraticule(scene) {

@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:,">
 <title>GPS DOP Simulator</title>
 <style>
   :root {
@@ -46,6 +47,22 @@
   #sat-tip .name { font-size: 14px; font-weight: 600; margin-bottom: 4px; }
   #sat-tip table td { border: 0; padding: 1px 0; text-align: left; vertical-align: top; }
   #sat-tip table td:first-child { color: var(--muted); padding-right: 10px; white-space: nowrap; }
+  button.secondary { background: var(--bg); color: var(--text); border: 1px solid var(--line); font-weight: 500; padding: 3px 10px; }
+  button.x { background: none; color: var(--muted); border: 0; padding: 0 6px; font-size: 16px; line-height: 1; font-weight: 400; }
+  button.x:hover { color: var(--text); }
+  .swatch { display: inline-block; width: 11px; height: 11px; border-radius: 50%; margin: 0 6px 0 2px; vertical-align: -1px; }
+  .muted { color: var(--muted); }
+  .grow { flex: 1; }
+  .msg { font-size: 12px; min-height: 18px; color: var(--muted); margin: 4px 0; }
+  .msg.err { color: #ff8a80; }
+  #tab-cs .row label { width: 118px; }
+  #tab-cs .row label.chk { width: auto; }
+  #tab-cs details { border-bottom: 1px solid var(--line); padding: 4px 0; }
+  #tab-cs summary { cursor: pointer; display: flex; align-items: center; gap: 2px; }
+  #tab-cs summary .x { margin-left: auto; }
+  #tab-cs .sat-row { display: flex; align-items: center; padding: 1px 0 1px 22px; font-size: 12px; }
+  #tab-cs .sat-row label { flex: 1; display: flex; gap: 6px; align-items: center; }
+  #tab-cs .sat-row .name { min-width: 64px; }
   .tabs { display: flex; gap: 4px; margin: 10px 0 0; border-bottom: 1px solid var(--line); }
   .tab { background: none; color: var(--muted); border-radius: 4px 4px 0 0; padding: 6px 12px;
          font-weight: 500; border-bottom: 2px solid transparent; }
@@ -90,6 +107,7 @@
     <div class="tabs" role="tablist">
       <button class="tab active" id="tab-btn-live" role="tab" aria-selected="true">Live</button>
       <button class="tab" id="tab-btn-mc" role="tab" aria-selected="false">Monte Carlo</button>
+      <button class="tab" id="tab-btn-cs" role="tab" aria-selected="false">Constellation</button>
     </div>
 
     <section id="tab-live">
@@ -167,6 +185,7 @@
       <table class="kv"><tbody>
         <tr><td>Trials done</td><td id="r-done">–</td></tr>
         <tr><td>Seed used</td><td id="r-seed">–</td></tr>
+        <tr><td>Satellites used / time window</td><td id="r-config">–</td></tr>
         <tr><td>Satellites in view, mean ± SE</td><td id="r-mean">–</td></tr>
         <tr><td>Analytic mean (check)</td><td id="r-check">–</td></tr>
         <tr><td>Satellites in view, min / max</td><td id="r-minmax">–</td></tr>
@@ -185,6 +204,49 @@
       <h2><span id="hist-dop-title">PDOP</span> distribution</h2>
       <canvas class="hist" id="hist-dop"></canvas>
       <div class="caption" id="cap-dop"></div>
+    </section>
+
+    <section id="tab-cs" hidden>
+      <div class="sub">The satellites used everywhere: the Live tab, the sky plot and the Monte Carlo. All of them share one receiver clock, so any 4 in view give a position fix. Click a satellite on the globe to switch it off or on.</div>
+
+      <h2>Constellations</h2>
+      <div id="cs-presets"></div>
+
+      <h2>Add a satellite</h2>
+      <div id="cs-circ-fields">
+        <div class="row"><label id="cs-alt-label" for="cs-alt">Altitude (km)</label><input id="cs-alt" type="number" step="any" value="20200"></div>
+        <div class="row"><label for="cs-inc">Inclination (°)</label><input id="cs-inc" type="number" step="any" value="55"></div>
+        <div class="row"><label for="cs-raan">RAAN (°)</label><input id="cs-raan" type="number" step="any" value="0"></div>
+        <div class="row"><label for="cs-phase">Starting phase (°)</label><input id="cs-phase" type="number" step="any" value="0"></div>
+      </div>
+      <div id="cs-ell-fields" hidden>
+        <div class="row"><label for="cs-ap">Apogee alt. (km)</label><input id="cs-ap" type="number" step="any" value="35786"></div>
+        <div class="row"><label for="cs-argp">Arg. of perigee (°)</label><input id="cs-argp" type="number" step="any" value="0"></div>
+      </div>
+      <div id="cs-geo-fields" hidden>
+        <div class="row"><label for="cs-lon">Longitude (°E)</label><input id="cs-lon" type="number" step="any" value="0"></div>
+      </div>
+      <div class="row">
+        <label class="chk"><input id="cs-ell" type="checkbox"> Elliptical</label>
+        <label class="chk"><input id="cs-geo" type="checkbox"> Geostationary</label>
+      </div>
+      <div class="msg" id="cs-msg"></div>
+      <div class="row"><button id="cs-add">Add satellite</button></div>
+
+      <h2>Add a Walker constellation</h2>
+      <div id="cs-walker">
+        <div class="row"><label for="cs-w-T">Satellites T</label><input id="cs-w-T" type="number" step="1" value="12"></div>
+        <div class="row"><label for="cs-w-P">Planes P</label><input id="cs-w-P" type="number" step="1" value="3"></div>
+        <div class="row"><label for="cs-w-F">Phasing F</label><input id="cs-w-F" type="number" step="1" value="1"></div>
+        <div class="row"><label for="cs-w-alt">Altitude (km)</label><input id="cs-w-alt" type="number" step="any" value="20200"></div>
+        <div class="row"><label for="cs-w-inc">Inclination (°)</label><input id="cs-w-inc" type="number" step="any" value="55"></div>
+      </div>
+      <div class="msg" id="cs-w-msg"></div>
+      <div class="row"><button id="cs-w-add">Add Walker T/P/F</button></div>
+
+      <h2>Satellites <span id="cs-count" class="muted"></span></h2>
+      <div id="cs-list"></div>
+      <div class="row"><button class="secondary" id="cs-reset">Reset to GPS only</button></div>
     </section>
   </aside>
 </main>
