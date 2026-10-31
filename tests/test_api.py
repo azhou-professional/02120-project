@@ -123,8 +123,8 @@ def test_orbit_paths_share_one_ring_per_orbit():
 
 def test_preset_info_and_elements():
     info = json.loads(api.preset_info())
-    assert [p["key"] for p in info] == ["gps", "galileo", "beidou_meo", "beidou_igso_geo"]
-    assert [p["count"] for p in info] == [24, 24, 24, 6]
+    assert [p["key"] for p in info] == ["gps", "galileo", "beidou_meo", "beidou_igso_geo", "gps_1999"]
+    assert [p["count"] for p in info] == [24, 24, 24, 6, 27]
     for p in info:
         data = json.loads(api.preset_elements(p["key"]))
         assert len(data["elements"]) == p["count"] == len(data["names"])

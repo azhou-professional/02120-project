@@ -88,8 +88,14 @@
   .dialog .row label:not(.chk) { width: 118px; }
   input.pick.big { width: 26px; height: 26px; border-radius: 6px; }
   input.pick.big::-webkit-color-swatch, input.pick.big::-moz-color-swatch { border-radius: 4px; }
-  .tabs { display: flex; gap: 4px; margin: 10px 0 0; border-bottom: 1px solid var(--line); }
-  .tab { background: none; color: var(--muted); border-radius: 4px 4px 0 0; padding: 6px 8px; white-space: nowrap;
+  #cmp-chart { width: 100%; height: 170px; display: block; margin-top: 6px; }
+  table.cmp td, table.cmp th { font-size: 11.5px; }
+  table.cmp tr[data-week] { cursor: pointer; }
+  table.cmp tr.sel td { background: #1f2a36; }
+  td.ok { color: #9ccc65; } td.off { color: #ffb74d; }
+  #cmp-details { line-height: 1.5; }
+  .tabs { display: flex; flex-wrap: wrap; gap: 4px; margin: 10px 0 0; border-bottom: 1px solid var(--line); }
+  .tab { background: none; color: var(--muted); border-radius: 4px 4px 0 0; padding: 6px 6px; white-space: nowrap; font-size: 13px;
          font-weight: 500; border-bottom: 2px solid transparent; }
   .tab.active { color: var(--text); border-bottom-color: var(--accent); }
   [hidden] { display: none !important; }
@@ -176,6 +182,7 @@
       <button class="tab" id="tab-btn-mc" role="tab" aria-selected="false">Monte Carlo</button>
       <button class="tab" id="tab-btn-cs" role="tab" aria-selected="false">Constellation</button>
       <button class="tab" id="tab-btn-tr" role="tab" aria-selected="false">Terrain</button>
+      <button class="tab" id="tab-btn-cmp" role="tab" aria-selected="false">Compare</button>
     </div>
 
     <section id="tab-live">
@@ -304,6 +311,38 @@
         <input id="tr-angle-num" type="number" min="0" max="80" step="0.5" value="20" disabled></div>
       <svg id="tr-diagram" viewBox="0 0 300 140" role="img" aria-label="Side view of the valley"></svg>
       <div class="msg" id="tr-msg"></div>
+    </section>
+    <section id="tab-cmp" hidden>
+      <div class="sub">Our model against published results. <b>FAA GPS SPS Performance Analysis Report #26</b>
+        (1999), Table 2-1: global coverage of the real GPS constellation, GPS weeks 1003-1016, recomputed here
+        with the same weekly almanacs and the FAA's method (5° grid, every minute for 24 h, 5° mask, good =
+        4+ satellites and PDOP ≤ 6). Click a week for details.</div>
+      <div class="row"><label for="cmp-metric">Show</label>
+        <select id="cmp-metric"><option value="global_999_pdop">Global 99.9% PDOP</option>
+          <option value="global_average_pct">Global average availability</option>
+          <option value="worst_point_pct">Worst-case point availability</option></select></div>
+      <canvas id="cmp-chart"></canvas>
+      <div class="caption" id="cmp-chart-cap"></div>
+      <div class="legend"><div class="keys">
+        <span><span class="dot" style="background:none;border:1.5px solid #e8e8e8;border-radius:2px;transform:rotate(45deg)"></span>FAA (published)</span>
+        <span><span class="dot" style="background:#3987e5"></span>Ours, real almanac</span>
+        <span><span class="dot" style="background:#9ccc65"></span>Ours, ideal 24</span></div></div>
+      <div class="msg" id="cmp-summary"></div>
+      <table id="cmp-table" class="cmp"></table>
+      <div class="msg" id="cmp-details"></div>
+      <div class="row"><button id="cmp-recompute">Recompute this week in the browser</button><progress id="cmp-progress" max="1" value="0"></progress></div>
+      <div class="msg" id="cmp-recompute-msg"></div>
+
+      <h2>PDOP map on the globe</h2>
+      <div class="row"><label class="chk"><input id="cmp-map" type="checkbox"> Show</label>
+        <select id="cmp-map-source"><option value="real">Selected week, real almanac</option><option value="ideal">Ideal Walker 24/6/1</option></select></div>
+      <div class="legend"><div class="bar" id="cmp-legend"></div>
+        <div class="scale"><span>PDOP 1.5</span><span>6</span></div>
+        <div class="keys"><span><span class="dot" id="cmp-legend-nofix"></span>no fix more than 0.01% of the time</span></div></div>
+      <div class="msg" id="cmp-map-note"></div>
+
+      <h2>Langley (1999), worked values</h2>
+      <table id="cmp-langley" class="cmp"></table>
     </section>
   </aside>
 </main>

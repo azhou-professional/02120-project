@@ -4,18 +4,27 @@
 import { loadPyodide } from "https://cdn.jsdelivr.net/pyodide/v0.26.4/full/pyodide.mjs";
 import { loadSim } from "./pyloader.js";
 
-let mc = null;
+let mc = null, faa = null;
 let currentRun = null;
 
 const ready = loadSim(loadPyodide)
-  .then((py) => { mc = py.pyimport("sim.montecarlo"); postMessage({ type: "ready" }); })
+  .then((py) => { mc = py.pyimport("sim.montecarlo"); faa = py.pyimport("sim.faa"); postMessage({ type: "ready" }); })
   .catch((e) => postMessage({ type: "error", message: String(e) }));
 
 onmessage = async ({ data }) => {
   await ready;
   if (!mc) return;
   try {
-    if (data.cmd === "start") {
+    if (data.cmd === "faa") {                  // recompute one week of the FAA reproduction (Compare tab)
+      faa.faa_start(data.week);
+      let fraction = 0;
+      while (fraction < 1) {
+        fraction = JSON.parse(faa.faa_advance(60)).fraction;          // one hour of minutes at a time
+        postMessage({ type: "faa-progress", fraction });
+        await new Promise((r) => setTimeout(r, 0));                   // let progress messages out
+      }
+      postMessage({ type: "faa-done", week: data.week, result: JSON.parse(faa.faa_result()) });
+    } else if (data.cmd === "start") {
       currentRun = data.runId;
       const info = JSON.parse(mc.mc_start(data.n, data.seed, data.pdopMax, data.maskDeg, JSON.stringify(data.elements), data.windowS));
       postMessage({ type: "started", runId: data.runId, ...info });

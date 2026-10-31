@@ -1,0 +1,46 @@
+{
+  "faa_pan26": {
+    "source": "FAA William J. Hughes Technical Center, GPS SPS Performance Analysis Report #26 (30 July 1999), paper/PAN26_0499.pdf",
+    "method": "Weekly almanac; every 5 deg grid point 180W-180E (72 longitudes) x 80S-80N (33 latitudes) = 2376 points; PDOP every minute for 24 h (1440 samples); 5 deg mask, no obscura; good = 4+ satellites and PDOP <= 6. Spec: global average >= 99.9 %, worst-case point >= 96.9 %.",
+    "table_2_1": {
+      "where": "Table 2-1 Coverage Statistics, PDF page 12 (report page 6)",
+      "columns": ["gps_week", "global_999_pdop", "global_average_pct", "worst_point_pct"],
+      "rows": [
+        [1003, 3.31, 100.0, 100.0],
+        [1004, 3.29, 100.0, 100.0],
+        [1005, 3.29, 100.0, 100.0],
+        [1006, 3.71, 99.994, 98.958],
+        [1007, 5.02, 99.963, 98.264],
+        [1008, 3.24, 100.0, 99.931],
+        [1009, 3.23, 100.0, 99.861],
+        [1010, 3.22, 100.0, 99.861],
+        [1011, 3.22, 100.0, 99.861],
+        [1012, 3.30, 100.0, 99.792],
+        [1013, 4.04, 99.977, 98.819],
+        [1014, 4.02, 99.977, 98.889],
+        [1015, 4.03, 99.978, 98.889],
+        [1016, 4.03, 99.979, 98.889]
+      ]
+    },
+    "figure_2_2": {
+      "where": "Section 2.0 text about Figure 2-2 (week 1007), PDF page 11",
+      "worst_point_min_visible": 5,
+      "worst_point_pct_time_8_or_more_visible": 88.4
+    }
+  },
+  "langley_1999": {
+    "source": "Langley, R. B. (1999), Dilution of Precision, GPS World, May 1999, paper/gpsworld.may99.pdf",
+    "exact": [
+      {"case": "one satellite at the zenith, three at -19.47 deg elevation 120 deg apart (regular tetrahedron)", "quantity": "GDOP", "value": 1.581, "where": "PDF page 3"},
+      {"case": "one satellite at the zenith, three on the horizon 120 deg apart", "quantity": "GDOP", "value": 1.732, "where": "PDF page 3"},
+      {"case": "one satellite at the zenith, three at 15 deg elevation 120 deg apart", "quantity": "HDOP", "value": 1.195, "where": "PDF page 4"},
+      {"case": "one satellite at the zenith, three at 15 deg elevation 120 deg apart", "quantity": "VDOP", "value": 1.558, "where": "PDF page 4"},
+      {"case": "same, but the receiver clock is known (only x, y, z estimated)", "quantity": "VDOP", "value": 0.913, "where": "PDF page 4"},
+      {"case": "same, but the receiver clock is known (only x, y, z estimated)", "quantity": "HDOP", "value": 1.195, "where": "PDF page 4"}
+    ],
+    "approximate": [
+      {"claim": "at the poles the highest elevation a GPS satellite can reach is about 45 deg", "value_deg": 45, "where": "PDF page 4"},
+      {"claim": "Fredericton, New Brunswick, all satellites above a 5 deg mask over one day in early 1999: GDOP averages about 2 and never exceeds 3.5", "lat": 45.95, "lon": -66.64, "gdop_mean": 2.0, "gdop_max": 3.5, "where": "Figure 5 caption, PDF page 4"}
+    ]
+  }
+}
