@@ -190,6 +190,13 @@ def circular_speed(a):
     return np.sqrt(MU / np.asarray(a, dtype=float))
 
 
+def orbit_normal(elements):
+    """Unit vector perpendicular to each orbit plane, in the direction of the angular momentum r x v:
+    (sin(RAAN) sin(i), -cos(RAAN) sin(i), cos(i)). Used to orient the satellite models' solar wings."""
+    inc, raan = np.radians(elements[:, INC]), np.radians(elements[:, RAAN])
+    return np.stack([np.sin(raan) * np.sin(inc), -np.cos(raan) * np.sin(inc), np.cos(inc)], axis=-1)
+
+
 def perigee_radius(elements):
     return elements[:, A] * (1.0 - elements[:, ECC])
 

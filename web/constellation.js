@@ -2,6 +2,8 @@
 // that edits them. The numbers (orbits, validation, ring paths) come from Python (sim/api.py);
 // this file keeps the list, the colours and the labels, and draws the controls.
 
+import { drawThumb, spin } from "./thumbs.js";
+
 const $ = (id) => document.getElementById(id);
 
 const MAX_SATELLITES = 300;                      // same limit as sim/api.py
@@ -54,6 +56,11 @@ export function initConstellation(api, hooks) {
 
   const groupOf = (s) => groups.find((g) => g.id === s.group);
   const colorOf = (s) => s.color || groupOf(s).color;
+  // which low-poly model to draw: the preset's system (gps, galileo, beidou) or a generic one
+  const modelOf = (s) => {
+    const g = groupOf(s);
+    return g.preset ? presetList.find((p) => p.key === g.preset).system : "generic";
+  };
   const usedColors = () => [...groups.map((g) => g.color), ...sats.filter((s) => s.color).map((s) => s.color)];
   const newColor = (chosen) => chosen || randomColor(usedColors());
 
@@ -64,6 +71,8 @@ export function initConstellation(api, hooks) {
     const firstOnRing = (r) => info.ring_of.indexOf(r);
     hooks.globe.setConstellation({
       colors: sats.map(colorOf),
+      models: sats.map(modelOf),
+      normals: info.normals,
       ringOf: info.ring_of,
       paths: info.paths,
       ringColors: info.paths.map((_, r) => colorOf(sats[firstOnRing(r)])),
@@ -176,15 +185,29 @@ export function initConstellation(api, hooks) {
   }
   const activeElements = () => sats.filter((s) => s.enabled).map((s) => s.elements);
 
-  // ---- drawing the tab ------------------------------------------------------------------------------------
-  function renderPresets() {
-    $("cs-presets").innerHTML = presetList.map((p) => {
-      const present = groups.some((g) => g.preset === p.key);
-      const g = groups.find((x) => x.preset === p.key);
-      return `<div class="row preset"><span class="swatch" style="background:${g ? g.color : SYSTEM_COLORS[p.system]}"></span>` +
-             `<span class="grow">${escapeHtml(p.label)} <span class="muted">(${p.count})</span></span>` +
-             `<button class="secondary" data-act="preset" data-key="${p.key}">${present ? "Remove" : "Add"}</button></div>`;
-    }).join("");
+  // ---- drawing the tab and the "Add satellites" cards ----------------------------------------------------------
+  const PRESET_TEXT = {
+    gps: "Walker 24/6/1 · 20,182 km · 55°", galileo: "Walker 24/3/1 · 23,222 km · 56°",
+    beidou_meo: "Walker 24/3/1 · 21,528 km · 55°", beidou_igso_geo: "3 inclined geosynchronous + 3 geostationary",
+  };
+  const CUSTOM_CARDS = [
+    { kind: "single", title: "Single satellite", text: "Circular or elliptical orbit" },
+    { kind: "geo", title: "Geostationary", text: "Hangs over one longitude" },
+    { kind: "walker", title: "Walker constellation", text: "T satellites in P planes, phasing F" },
+  ];
+  const card = (attrs, model, color, title, text, state, present) =>
+    `<button class="card${present ? " present" : ""}" ${attrs}><canvas width="240" height="140" data-model="${model}" data-color="${color}"></canvas>` +
+    `<span class="t">${escapeHtml(title)}</span><span class="d">${escapeHtml(text)}</span><span class="state">${state}</span></button>`;
+
+  function renderCards() {
+    $("cs-presets").innerHTML =
+      presetList.map((p) => {
+        const g = groups.find((x) => x.preset === p.key);
+        return card(`data-act="preset" data-key="${p.key}"`, p.system, g ? g.color : SYSTEM_COLORS[p.system],
+                    `${p.label} (${p.count})`, PRESET_TEXT[p.key], g ? "Added ✓ · click to remove" : "Click to add", !!g);
+      }).join("") +
+      CUSTOM_CARDS.map((c) => card(`data-act="form" data-kind="${c.kind}"`, "generic", "#b0bec5", c.title, c.text, "Set up…", false)).join("");
+    $("cs-presets").querySelectorAll("canvas").forEach((cv) => drawThumb(cv, cv.dataset.model, cv.dataset.color));
   }
 
   function describe(s) {
@@ -210,7 +233,7 @@ export function initConstellation(api, hooks) {
              `<button class="x" data-act="grp-del" data-g="${g.id}" title="Remove this whole group" aria-label="Remove ${escapeHtml(g.label)}">×</button>` +
              `</summary>${items}</details>`;
     }).join("");
-    $("cs-list").innerHTML = rows || `<div class="muted">No satellites. Add a constellation above.</div>`;
+    $("cs-list").innerHTML = rows || `<div class="muted">No satellites. Use "Add satellites…".</div>`;
     $("cs-list").querySelectorAll('input[data-act="grp-toggle"]').forEach((box) => {
       const members = sats.filter((s) => s.group === +box.dataset.g);
       const on = members.filter((s) => s.enabled).length;
@@ -219,30 +242,25 @@ export function initConstellation(api, hooks) {
     $("cs-count").textContent = `(${sats.filter((s) => s.enabled).length} on of ${sats.length})`;
   }
 
-  function render() { renderPresets(); renderList(); applyLock(); }
+  function render() { if (!$("add-dialog").hidden) renderCards(); renderList(); applyLock(); }
 
-  // While locked every control in the tab is disabled; unlocking brings back the forms' own on/off state.
+  // While locked every control is disabled (and the Add dialog closed); unlocking brings back the forms' own state.
+  const lockable = () => [...$("tab-cs").querySelectorAll("input, button"), ...$("add-dialog").querySelectorAll("input, button")];
   function applyLock() {
-    if (locked) $("tab-cs").querySelectorAll("input, button").forEach((el) => { el.disabled = true; });
+    if (locked) lockable().forEach((el) => { el.disabled = true; });
   }
 
   function setLocked(on) {
     locked = on;
+    if (on) closeDialog();
     $("cs-lock-note").hidden = !on;
-    if (!on) $("tab-cs").querySelectorAll("input, button").forEach((el) => { el.disabled = false; });
+    if (!on) lockable().forEach((el) => { el.disabled = false; });
     render();
     if (!on) { updateSatelliteForm(); updateWalkerForm(); }      // the Add buttons depend on the forms being valid
   }
 
   // ---- the controls ------------------------------------------------------------------------------------------
   const message = (id, text, isError) => { $(id).textContent = text; $(id).classList.toggle("err", isError); };
-
-  $("cs-presets").addEventListener("click", (e) => {
-    const b = e.target.closest('[data-act="preset"]');
-    if (!b) return;
-    const g = groups.find((x) => x.preset === b.dataset.key);
-    try { g ? removeGroup(g.id) : addPreset(b.dataset.key); } catch (err) { message("cs-msg", err.message, true); }
-  });
 
   $("cs-list").addEventListener("change", (e) => {
     const t = e.target;
@@ -270,7 +288,76 @@ export function initConstellation(api, hooks) {
 
   $("cs-reset").addEventListener("click", reset);
 
-  // add one satellite
+  // ---- orbit preview: dashed rings and ghost satellites on the globe, not yet added ------------------------------
+  function preview(elements, color, model = "generic") {
+    if (!elements || elements.length === 0) { hooks.globe.clearPreview(); return; }
+    const pv = JSON.parse(api.preview(JSON.stringify(elements), hooks.getTime()));
+    hooks.globe.setPreview({ ...pv, color, models: elements.map(() => model) });
+  }
+  const PREVIEW_COLOR = "#ffffff";
+  const chosen = (pre) => ($(`${pre}color-random`).checked ? null : $(`${pre}color`).value);
+
+  // ---- the dialog ----------------------------------------------------------------------------------------------------
+  let stopSpin = null, view = "cards";
+  function openDialog() {
+    if (locked) return;
+    $("add-dialog").hidden = false;
+    showView("cards");
+  }
+  function closeDialog() {
+    $("add-dialog").hidden = true;
+    if (stopSpin) { stopSpin(); stopSpin = null; }
+    hooks.globe.clearPreview();
+  }
+  function showView(kind) {
+    view = kind;
+    const cards = kind === "cards";
+    $("cs-presets").hidden = !cards;
+    $("dlg-back").hidden = cards;
+    $("dlg-form-sat").hidden = !(kind === "single" || kind === "geo");
+    $("dlg-form-walker").hidden = kind !== "walker";
+    $("dlg-title").textContent = { cards: "Add satellites", single: "Single satellite", geo: "Geostationary satellite", walker: "Walker constellation" }[kind];
+    hooks.globe.clearPreview();
+    if (cards) { renderCards(); return; }
+    if (kind === "single" || kind === "geo") {
+      $("cs-geo").checked = kind === "geo";
+      updateSatelliteForm();
+    } else {
+      updateWalkerForm();
+    }
+  }
+  $("cs-open-add").addEventListener("click", openDialog);
+  $("dlg-close").addEventListener("click", closeDialog);
+  $("dlg-back").addEventListener("click", () => showView("cards"));
+
+  $("cs-presets").addEventListener("click", (e) => {
+    const b = e.target.closest("[data-act]");
+    if (!b || locked) return;
+    if (b.dataset.act === "form") { showView(b.dataset.kind); return; }
+    const g = groups.find((x) => x.preset === b.dataset.key);
+    try { g ? removeGroup(g.id) : addPreset(b.dataset.key); } catch (err) { message("cs-msg", err.message, true); }
+    hooks.globe.clearPreview();
+  });
+  // hovering a card: its model turns; hovering a preset also previews its orbits
+  $("cs-presets").addEventListener("mouseover", (e) => {
+    const b = e.target.closest(".card");
+    if (!b || b.contains(e.relatedTarget)) return;
+    if (stopSpin) stopSpin();
+    const cv = b.querySelector("canvas");
+    stopSpin = spin(cv, cv.dataset.model, cv.dataset.color);
+    if (b.dataset.act === "preset" && !groups.some((g) => g.preset === b.dataset.key)) {
+      const p = presetList.find((x) => x.key === b.dataset.key);
+      preview(JSON.parse(api.preset_elements(p.key)).elements, SYSTEM_COLORS[p.system], p.system);
+    }
+  });
+  $("cs-presets").addEventListener("mouseout", (e) => {
+    const b = e.target.closest(".card");
+    if (!b || b.contains(e.relatedTarget)) return;
+    if (stopSpin) { stopSpin(); stopSpin = null; }
+    hooks.globe.clearPreview();
+  });
+
+  // ---- the single-satellite / geostationary form ----------------------------------------------------------------------
   const num = (id) => { const v = parseFloat($(id).value); return Number.isFinite(v) ? v : null; };
   const satelliteParams = () => ({
     geo: $("cs-geo").checked, lon: num("cs-lon"), alt: num("cs-alt"), inc: num("cs-inc"), raan: num("cs-raan"),
@@ -282,7 +369,7 @@ export function initConstellation(api, hooks) {
     $("cs-circ-fields").hidden = geo;
     $("cs-geo-fields").hidden = !geo;
     $("cs-ell-fields").hidden = geo || !ell;
-    $("cs-ell").disabled = geo;
+    $("cs-ell").disabled = geo || locked;
     $("cs-alt-label").textContent = ell ? "Perigee alt. (km)" : "Altitude (km)";
     const r = JSON.parse(api.orbit_from_form(JSON.stringify(satelliteParams())));
     if (r.ok) {
@@ -293,39 +380,55 @@ export function initConstellation(api, hooks) {
     } else {
       message("cs-msg", r.error, true);
     }
-    $("cs-add").disabled = !r.ok;
+    $("cs-add").disabled = !r.ok || locked;
+    const formOpen = !$("add-dialog").hidden && !$("dlg-form-sat").hidden;
+    if (formOpen) r.ok ? preview([r.elements], chosen("cs-") || PREVIEW_COLOR) : hooks.globe.clearPreview();
     return r;
   }
-  $("tab-cs").querySelectorAll("#cs-circ-fields input, #cs-ell-fields input, #cs-geo-fields input, #cs-ell, #cs-geo")
+  document.querySelectorAll("#cs-circ-fields input, #cs-ell-fields input, #cs-geo-fields input, #cs-ell, #cs-geo")
     .forEach((el) => el.addEventListener("input", updateSatelliteForm));
+  $("cs-add").addEventListener("mouseenter", updateSatelliteForm);       // hovering Add shows (refreshes) the preview
   $("cs-add").addEventListener("click", () => {
     const r = updateSatelliteForm();
     if (!r.ok) return;
     try {
-      const label = addCustomSatellite(r.elements);
+      const label = addCustomSatellite(r.elements, chosen("cs-"));
       message("cs-msg", `Added ${label}.`, false);
     } catch (err) { message("cs-msg", err.message, true); }
   });
 
-  // add a Walker constellation
+  // ---- the Walker form -------------------------------------------------------------------------------------------------
   const walkerParams = () => ({ T: num("cs-w-T"), P: num("cs-w-P"), F: num("cs-w-F"), alt: num("cs-w-alt"), inc: num("cs-w-inc") });
   function updateWalkerForm() {
     const r = JSON.parse(api.walker_from_form(JSON.stringify(walkerParams())));
     message("cs-w-msg", r.ok ? `${r.elements.length} satellites in ${walkerParams().P} planes` : r.error, !r.ok);
-    $("cs-w-add").disabled = !r.ok;
+    $("cs-w-add").disabled = !r.ok || locked;
+    const formOpen = !$("add-dialog").hidden && !$("dlg-form-walker").hidden;
+    if (formOpen) r.ok ? preview(r.elements, chosen("cs-w-") || PREVIEW_COLOR) : hooks.globe.clearPreview();
     return r;
   }
-  $("tab-cs").querySelectorAll("#cs-walker input").forEach((el) => el.addEventListener("input", updateWalkerForm));
+  document.querySelectorAll("#cs-walker input").forEach((el) => el.addEventListener("input", updateWalkerForm));
+  $("cs-w-add").addEventListener("mouseenter", updateWalkerForm);
   $("cs-w-add").addEventListener("click", () => {
     const r = updateWalkerForm();
     if (!r.ok) return;
     const p = walkerParams();
-    try { addWalker(p.T, p.P, p.F, r); } catch (err) { message("cs-w-msg", err.message, true); }
+    try {
+      addWalker(p.T, p.P, p.F, r, chosen("cs-w-"));
+      message("cs-w-msg", `Added Walker ${p.T}/${p.P}/${p.F}.`, false);
+    } catch (err) { message("cs-w-msg", err.message, true); }
   });
+
+  // the colour controls: picking a colour turns "random" off; both refresh the preview
+  for (const pre of ["cs-", "cs-w-"]) {
+    const refresh = () => (pre === "cs-" ? updateSatelliteForm() : updateWalkerForm());
+    $(`${pre}color`).addEventListener("input", () => { $(`${pre}color-random`).checked = false; refresh(); });
+    $(`${pre}color-random`).addEventListener("change", refresh);
+  }
 
   updateSatelliteForm();
   updateWalkerForm();
 
   return { addPreset, addCustomSatellite, addWalker, toggleSat, setLocked, decorate, activeElements, count: () => sats.length,
-           groupColors: () => groups.map((g) => ({ label: g.label, color: g.color })) };
+           openDialog, closeDialog, groupColors: () => groups.map((g) => ({ label: g.label, color: g.color })) };
 }

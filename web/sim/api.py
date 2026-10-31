@@ -87,6 +87,16 @@ def orbit_paths(elements, n=181):
     return paths, ring_of
 
 
+def preview(elements_json, t_seconds):
+    """What a set of satellites would look like if added, without adding them: one ring per distinct
+    orbit, each satellite's position at time t, and its orbit normal (for the model's wings)."""
+    elements = np.array(json.loads(elements_json), dtype=float).reshape(-1, 6)
+    paths, ring_of = orbit_paths(elements)
+    return json.dumps({"paths": paths, "ring_of": ring_of,
+                       "positions": constellation.positions(elements, t_seconds).tolist(),
+                       "normals": constellation.orbit_normal(elements).tolist()})
+
+
 def set_terrain(terrain_json):
     """Set the terrain around the receiver: "null" for open sky or {"type": "cone", "angle_deg": e}."""
     terrain = json.loads(terrain_json)
@@ -102,7 +112,8 @@ def set_terrain(terrain_json):
 
 
 def set_constellation(elements_json, enabled_json):
-    """Replace the constellation. Returns the orbit rings to draw: {"paths", "ring_of"}."""
+    """Replace the constellation. Returns the orbit rings to draw and each satellite's orbit normal:
+    {"paths", "ring_of", "normals"}."""
     elements = np.array(json.loads(elements_json), dtype=float).reshape(-1, 6)
     enabled = np.array(json.loads(enabled_json), dtype=bool).reshape(-1)
     if len(elements) != len(enabled):
@@ -111,7 +122,7 @@ def set_constellation(elements_json, enabled_json):
         raise ValueError(f"at most {MAX_SATELLITES} satellites are allowed")
     _state["elements"], _state["enabled"] = elements, enabled
     paths, ring_of = orbit_paths(elements)
-    return json.dumps({"paths": paths, "ring_of": ring_of})
+    return json.dumps({"paths": paths, "ring_of": ring_of, "normals": constellation.orbit_normal(elements).tolist()})
 
 
 def epoch_info():

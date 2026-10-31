@@ -3,12 +3,15 @@ import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { trialColor, rgb01, FADE } from "./trialcolors.js";
 import { buildEarthGeometry } from "./earth.js";
+import { satelliteGeometries } from "./satmodels.js";
 
 const R_EARTH = 6378.137;      // km; scene units are Earth radii
 const K = 1 / R_EARTH;
 
 // Physical frame (x, y, z=north) -> Three.js frame (y is up): (x, y, z) -> (x, z, -y).
 const toScene = (p) => new THREE.Vector3(p[0] * K, p[2] * K, -p[1] * K);
+const dirToScene = (d) => new THREE.Vector3(d[0], d[2], -d[1]);     // a direction (no scaling)
+const EARTH_CENTRE = new THREE.Vector3(0, 0, 0);
 
 // onPick(lat, lon): the Earth was clicked.
 // onHover(i, x, y): satellite i (or -1 for none) is under the mouse, at (x, y) pixels inside the container.
@@ -192,7 +195,7 @@ export function createGlobe(container, onPick, onHover, land, onSatClick) {
   // setConstellation() (below) builds one sphere per satellite and one ring per distinct orbit.
   // Satellites that are switched off are drawn as faint ghosts; a ring is drawn faintly too if
   // every satellite on it is switched off.
-  const satGeometry = new THREE.SphereGeometry(0.045, 16, 12);
+  let normals = [];      // orbit normal of each satellite (scene axes): the axis of its solar wings
   let sats = [];         // one mesh per satellite
   let ringLines = [];    // one line per distinct orbit
   let ringOf = [];       // which ring each satellite is on
@@ -210,7 +213,8 @@ export function createGlobe(container, onPick, onHover, land, onSatClick) {
   let hovered = -1, lastReported = null;
   let clickCandidate = -1;                  // the satellite that was under the mouse when it was pressed
 
-  function satScale(i) { return i === hovered ? 2.2 : !enabled[i] ? 0.7 : visible[i] ? 1.3 : 0.8; }
+  const MODEL_SIZE = 1.6;   // the low-poly models are drawn this much larger than their built size, to be seen on the globe
+  function satScale(i) { return MODEL_SIZE * (i === hovered ? 2.2 : !enabled[i] ? 0.7 : visible[i] ? 1.3 : 0.8); }
   function satOpacity(i) { return !enabled[i] ? 0.12 : visible[i] ? 1 : 0.35; }
   function ringOpacity(r) { return hovered >= 0 ? (r === ringOf[hovered] ? 1.0 : 0.1) : ringActive[r] ? 0.35 : 0.06; }
 
@@ -249,8 +253,10 @@ export function createGlobe(container, onPick, onHover, land, onSatClick) {
   function setConstellation(c) {
     sats.forEach((m) => { scene.remove(m); m.material.dispose(); });
     ringLines.forEach((l) => { scene.remove(l); l.geometry.dispose(); l.material.dispose(); });
-    sats = c.colors.map((color) => {
-      const m = new THREE.Mesh(satGeometry, new THREE.MeshBasicMaterial({ color, transparent: true }));
+    const models = satelliteGeometries();
+    sats = c.colors.map((color, i) => {
+      const material = new THREE.MeshLambertMaterial({ color, vertexColors: true, transparent: true, side: THREE.DoubleSide });
+      const m = new THREE.Mesh(models[c.models[i]] || models.generic, material);
       scene.add(m);
       return m;
     });
@@ -262,6 +268,7 @@ export function createGlobe(container, onPick, onHover, land, onSatClick) {
       return line;
     });
     ringOf = c.ringOf;
+    normals = c.normals.map(dirToScene);
     ringActive = c.ringActive;
     enabled = c.colors.map(() => true);
     visible = c.colors.map(() => false);
@@ -287,6 +294,8 @@ export function createGlobe(container, onPick, onHover, land, onSatClick) {
     snap.sat_positions.forEach((p, i) => {
       const pos = toScene(p);
       sats[i].position.copy(pos);
+      sats[i].up.copy(normals[i]);                // wings along the orbit normal ...
+      sats[i].lookAt(EARTH_CENTRE);               // ... and the body's +z (antennas) facing the Earth
       sats[i].material.opacity = satOpacity(i);
       sats[i].scale.setScalar(satScale(i));
       if (visible[i]) {
@@ -355,6 +364,39 @@ export function createGlobe(container, onPick, onHover, land, onSatClick) {
     renderer.render(scene, camera);
   });
 
+  // ---- orbit preview (the Add dialog): dashed rings and see-through satellites that are not added yet ----
+  let previewObjects = [];
+  function clearPreview() {
+    previewObjects.forEach((o) => {
+      scene.remove(o);
+      if (o.isLine) o.geometry.dispose();            // the satellite geometries are shared: keep them
+      o.material.dispose();
+    });
+    previewObjects = [];
+  }
+  /** pv = {paths, positions, normals, color, models} (inertial km, as from api.preview). */
+  function setPreview(pv) {
+    clearPreview();
+    const models = satelliteGeometries();
+    pv.paths.forEach((pts) => {
+      const line = new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(pts.map(toScene)),
+        new THREE.LineDashedMaterial({ color: pv.color, dashSize: 0.12, gapSize: 0.08, transparent: true, opacity: 0.9 }));
+      line.computeLineDistances();
+      scene.add(line);
+      previewObjects.push(line);
+    });
+    pv.positions.forEach((p, i) => {
+      const m = new THREE.Mesh(models[pv.models[i]] || models.generic,
+        new THREE.MeshLambertMaterial({ color: pv.color, vertexColors: true, transparent: true, opacity: 0.55, side: THREE.DoubleSide }));
+      m.position.copy(toScene(p));
+      m.up.copy(dirToScene(pv.normals[i]));
+      m.lookAt(EARTH_CENTRE);
+      m.scale.setScalar(MODEL_SIZE * 1.3);
+      scene.add(m);
+      previewObjects.push(m);
+    });
+  }
+
   /** Where satellite i is on screen, in pixels inside the container (for tests and debugging). */
   function screenOf(i) {
     camera.updateMatrixWorld();
@@ -363,7 +405,10 @@ export function createGlobe(container, onPick, onHover, land, onSatClick) {
   }
 
   return { update, setConstellation, spawnTrials, clearTrials, screenOf, blockedLines: () => blockedCount,
-           satColor: (i) => `#${sats[i].material.color.getHexString()}` };
+           setPreview, clearPreview, previewCount: () => previewObjects.length,
+           satColor: (i) => `#${sats[i].material.color.getHexString()}`,
+           // for tests: the model's +z (antenna) and +y (wing) axes, and its position, in scene axes
+           satAxes: (i) => { const e = sats[i].matrixWorld.elements; return { y: [e[4], e[5], e[6]], z: [e[8], e[9], e[10]], p: sats[i].position.toArray() }; } };
 }
 
 function addGraticule(scene) {

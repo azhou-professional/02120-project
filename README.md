@@ -10,10 +10,10 @@ The proposal is in `proposal.md`; the papers it builds on are listed in `papers.
 ## Run it locally
 
 ```bash
-./launch.sh          # runs tools/serve.py: serves web/ at http://localhost:8000
+./launch.sh          # runs tools/serve.py: serves web/ at http://localhost:3000
 ```
 
-Then open http://localhost:8000. Use a web server, not a double-click on `index.html`: the page
+Then open http://localhost:3000. Use a web server, not a double-click on `index.html`: the page
 fetches the Python files over HTTP. An internet connection is needed because Pyodide (v0.26.4,
 Python + numpy in the browser) and Three.js (v0.160.0) are loaded from the jsDelivr CDN.
 
@@ -42,7 +42,8 @@ handles the controls.
 | Monte Carlo (sampling, statistics, analytic check) | `web/sim/montecarlo.py` |
 | Entry points called by the page | `web/sim/api.py` |
 | Page, globe, sky plot, charts | `web/index.html`, `main.js`, `globe.js`, `skyplot.js`, `histogram.js`, `mc.js` |
-| Constellation tab: the satellite list, add/remove, colours | `web/constellation.js` (the numbers and validation come from `web/sim/api.py`) |
+| Constellation tab: the satellite list, colours, the "Add satellites" dialog and its orbit preview | `web/constellation.js` (the numbers and validation come from `web/sim/api.py`) |
+| Low-poly satellite models (GPS III, Galileo, BeiDou-3, generic) and the dialog's card pictures | `web/satmodels.js`, `web/thumbs.js` |
 | Monte Carlo runs in a Web Worker with its own Pyodide | `web/mc-worker.js`, `web/pyloader.js` |
 | Low-poly Earth: mesh and land colouring | `web/earth.js` |
 | Land/ocean grid made from the Natural Earth outlines | `tools/landmask.py` (reads `data/ne_110m_land.geojson`, writes `web/data/land_mask.json`) |
@@ -51,6 +52,9 @@ handles the controls.
 
 `main.py` at the top level is an early first draft (it uses Earth radius 6371 km and a nonrotating
 Earth). The web app does not use it.
+
+The satellite models are drawn far larger than life (at true size they would be invisible). Their bodies point at the
+Earth and their solar wings lie along the orbit normal; this is only for the picture and does not affect any result.
 
 ## Assumptions
 

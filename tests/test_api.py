@@ -73,7 +73,7 @@ def test_no_satellites_at_all():
     api.set_constellation("[]", "[]")
     s = snap()
     assert s["n_visible"] == 0 and s["dop"]["gdop"] is None and s["sat_positions"] == []
-    assert json.loads(api.set_constellation("[]", "[]")) == {"paths": [], "ring_of": []}
+    assert json.loads(api.set_constellation("[]", "[]")) == {"paths": [], "ring_of": [], "normals": []}
 
 
 def test_set_constellation_rejects_bad_input():
@@ -353,3 +353,18 @@ def test_deeper_valleys_see_fewer_satellites_and_position_worse():
     assert all(a > b for a, b in zip(means, means[1:]))
     assert all(a >= b for a, b in zip(avail, avail[1:])) and avail[-1] < avail[0]
     assert all(a < b for a, b in zip(med, med[1:]))
+
+
+# ---- orbit preview for the Add dialog ---------------------------------------------------------------------
+
+def test_preview_does_not_change_the_constellation_and_matches_the_orbits():
+    load("gps")
+    before = snap()
+    w = json.loads(api.walker_from_form(json.dumps(dict(T=12, P=3, F=1, alt=1200.0, inc=87.0))))
+    pv = json.loads(api.preview(json.dumps(w["elements"]), 4321.0))
+    assert len(pv["paths"]) == 3 and len(pv["positions"]) == 12 and len(pv["normals"]) == 12
+    el = np.array(w["elements"])
+    assert np.allclose(pv["positions"], c.positions(el, 4321.0))
+    for i, r in enumerate(pv["ring_of"]):                      # every satellite is on its ring (circular: same radius)
+        assert math.isclose(np.linalg.norm(pv["positions"][i]), np.linalg.norm(pv["paths"][r][0]), rel_tol=1e-9)
+    assert snap() == before                                     # nothing was added
