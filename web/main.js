@@ -5,6 +5,7 @@ import { drawSkyplot } from "./skyplot.js";
 import { loadSim } from "./pyloader.js";
 import { initMonteCarlo } from "./mc.js";
 import { initConstellation } from "./constellation.js";
+import { initCompare } from "./compare.js";
 import { loadLandMask } from "./earth.js";
 
 const $ = (id) => document.getElementById(id);
@@ -52,7 +53,7 @@ function satelliteInfoHtml(s, i) {
          `<div style="color:var(--muted);margin-top:4px">Click to switch ${s.enabled[i] ? "off" : "on"}</div>`;
 }
 
-const TABS = ["live", "mc", "cs", "tr"];
+const TABS = ["live", "mc", "cs", "tr", "cmp"];
 
 // Side view of the cone-shaped valley: the receiver at the bottom, walls at the blocking angle, the
 // hidden part of the sky shaded. Purely a picture; the numbers come from Python.
@@ -184,8 +185,10 @@ async function main() {
     getElements: () => cons.activeElements(), getMaskDeg: terrainAngle, api, onRunState: setRunLocked, onFeatured: showFeatured,
   });
   mc.refreshWindow();
+  const compare = await initCompare({ api, globe, mc });
   setupTabs((which) => {
     if (which === "mc") { mc.ensureWorker(); mc.redraw(); }
+    if (which === "cmp") compare.redraw();
     if (which === "live") dirty = true;    // the sky plot was skipped while hidden; redraw it
   });
 

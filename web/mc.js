@@ -33,12 +33,26 @@ export function initMonteCarlo(globe, { getElements, getMaskDeg, api, onRunState
     worker.onerror = (e) => { $("mc-status").textContent = `Worker error: ${e.message}`; };
   }
 
+  // "Recompute this week" for the Compare tab runs in the same worker.
+  let faaJob = null;
+  function recomputeFaa(week, onProgress) {
+    ensureWorker();
+    return new Promise((resolve, reject) => {
+      faaJob = { resolve, reject, onProgress, week };
+      if (ready) worker.postMessage({ cmd: "faa", week });
+    });
+  }
+
   function handle(m) {
+    if (m.type === "faa-progress") { if (faaJob) faaJob.onProgress(m.fraction); return; }
+    if (m.type === "faa-done") { if (faaJob) { faaJob.resolve(m.result); faaJob = null; } return; }
     if (m.type === "ready") {
       ready = true;
+      if (faaJob) worker.postMessage({ cmd: "faa", week: faaJob.week });
       $("mc-run").disabled = false;
       $("mc-status").textContent = "Ready.";
     } else if (m.type === "error") {
+      if (faaJob) { faaJob.reject(new Error(m.message)); faaJob = null; }
       $("mc-status").textContent = `Error: ${m.message}`;
       if (run) finish("Stopped by an error");
     } else if (!run || m.runId !== run.id) {
@@ -308,5 +322,5 @@ export function initMonteCarlo(globe, { getElements, getMaskDeg, api, onRunState
   }
 
   // charts drawn while the tab was hidden have zero width, so the tab redraws them when shown
-  return { ensureWorker, refreshWindow, redraw: () => { if (lastSummary) render(lastSummary); } };
+  return { ensureWorker, refreshWindow, recomputeFaa, busy: () => !!(run && !run.finished), redraw: () => { if (lastSummary) render(lastSummary); } };
 }

@@ -57,6 +57,20 @@ def beidou_igso_geo():
     return np.vstack([igso, geo])
 
 
+def gps_1999():
+    """The real GPS constellation of week 1007 (25 Apr - 1 May 1999), from its almanac: the healthy
+    satellites, placed where the almanac puts them at its reference time (1999-05-01 19:50 UTC).
+    The slow drift of the orbit planes is left out (see almanac.to_elements), so positions are right
+    near that date."""
+    from . import almanac
+    return almanac.to_elements(almanac.load_week(1007))
+
+
+def gps_1999_names():
+    from . import almanac
+    return [f"PRN{s['prn']:02d}" for s in almanac.load_week(1007)]
+
+
 # key -> label, short prefix for satellite labels, system (one colour per system), satellite
 # names, element builder. Labels read "<short>-<name>", e.g. GPS-A1, GAL-C8, BDS-I1, BDS-G3.
 PRESETS = {
@@ -66,4 +80,6 @@ PRESETS = {
                    "names": lambda: c.names(24, 3)},
     "beidou_igso_geo": {"label": "BeiDou IGSO + GEO", "short": "BDS", "system": "beidou", "build": beidou_igso_geo,
                         "names": lambda: ["I1", "I2", "I3", "G1", "G2", "G3"]},
+    "gps_1999": {"label": "GPS 1999 (week 1007)", "short": "G99", "system": "gps1999", "model": "gps", "build": gps_1999,
+                 "names": gps_1999_names},
 }

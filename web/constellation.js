@@ -7,7 +7,7 @@ import { drawThumb, spin } from "./thumbs.js";
 const $ = (id) => document.getElementById(id);
 
 const MAX_SATELLITES = 300;                      // same limit as sim/api.py
-const SYSTEM_COLORS = { gps: "#3987e5", galileo: "#eda100", beidou: "#d55181" };
+const SYSTEM_COLORS = { gps: "#3987e5", galileo: "#eda100", beidou: "#d55181", gps1999: "#8fd3ff" };
 
 // ---- colours -------------------------------------------------------------------------------------------
 // New groups (and new single satellites) get a random hue at fixed saturation and lightness, so they stay
@@ -59,7 +59,7 @@ export function initConstellation(api, hooks) {
   // which low-poly model to draw: the preset's system (gps, galileo, beidou) or a generic one
   const modelOf = (s) => {
     const g = groupOf(s);
-    return g.preset ? presetList.find((p) => p.key === g.preset).system : "generic";
+    return g.preset ? presetList.find((p) => p.key === g.preset).model : "generic";
   };
   const usedColors = () => [...groups.map((g) => g.color), ...sats.filter((s) => s.color).map((s) => s.color)];
   const newColor = (chosen) => chosen || randomColor(usedColors());
@@ -189,6 +189,7 @@ export function initConstellation(api, hooks) {
   const PRESET_TEXT = {
     gps: "Walker 24/6/1 · 20,182 km · 55°", galileo: "Walker 24/3/1 · 23,222 km · 56°",
     beidou_meo: "Walker 24/3/1 · 21,528 km · 55°", beidou_igso_geo: "3 inclined geosynchronous + 3 geostationary",
+    gps_1999: "The real 27 satellites of May 1999 (almanac). Set the date to 1999-05-01 to see them where they were",
   };
   const CUSTOM_CARDS = [
     { kind: "single", title: "Single satellite", text: "Circular or elliptical orbit" },
@@ -203,7 +204,7 @@ export function initConstellation(api, hooks) {
     $("cs-presets").innerHTML =
       presetList.map((p) => {
         const g = groups.find((x) => x.preset === p.key);
-        return card(`data-act="preset" data-key="${p.key}"`, p.system, g ? g.color : SYSTEM_COLORS[p.system],
+        return card(`data-act="preset" data-key="${p.key}"`, p.model, g ? g.color : SYSTEM_COLORS[p.system],
                     `${p.label} (${p.count})`, PRESET_TEXT[p.key], g ? "Added ✓ · click to remove" : "Click to add", !!g);
       }).join("") +
       CUSTOM_CARDS.map((c) => card(`data-act="form" data-kind="${c.kind}"`, "generic", "#b0bec5", c.title, c.text, "Set up…", false)).join("");
@@ -347,7 +348,7 @@ export function initConstellation(api, hooks) {
     stopSpin = spin(cv, cv.dataset.model, cv.dataset.color);
     if (b.dataset.act === "preset" && !groups.some((g) => g.preset === b.dataset.key)) {
       const p = presetList.find((x) => x.key === b.dataset.key);
-      preview(JSON.parse(api.preset_elements(p.key)).elements, SYSTEM_COLORS[p.system], p.system);
+      preview(JSON.parse(api.preset_elements(p.key)).elements, SYSTEM_COLORS[p.system], p.model);
     }
   });
   $("cs-presets").addEventListener("mouseout", (e) => {

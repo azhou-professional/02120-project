@@ -42,11 +42,14 @@ search result but the document could not be opened from here.
    arbitrary orientation instead.)
    Repeat cycle: 17 revolutions in 10 days, ESA Navipedia, https://gssc.esa.int/navipedia/index.php/GALILEO_Architecture
 
-5. BeiDou-3. China Satellite Navigation Office, BDS Signal-in-Space Interface Control Document (2020 edition).
-   http://en.beidou.gov.cn/SYSTEMS/ICD/202008/P020200803539206360377.pdf
-   Reported (the server refused the connection when opened): 3 GEO + 3 IGSO + 24 MEO; inclination 55 deg
-   (MEO, IGSO) and 0 deg (GEO); reference semi-major axis 27,906.1 km (MEO) and 42,162.2 km (IGSO/GEO);
-   GEO altitude 35,786 km at 80, 110.5 and 140 deg E.
+5. BeiDou-3. China Satellite Navigation Office, "BeiDou Navigation Satellite System Signal In Space
+   Interface Control Document, Open Service Signal B2b (Version 1.0)", BDS-SIS-ICD-B2b-1.0, July 2020.
+   Local file: paper/beidou.pdf
+   Verified (section 3.1 "Space Constellation", PDF page 11): 3 GEO + 3 IGSO + 24 MEO; GEO at 35,786 km
+   altitude, at 80, 110.5 and 140 deg E; IGSO at 35,786 km, inclination 55 deg; MEO at 21,528 km altitude,
+   inclination 55 deg. (The app's MEO semi-major axis 27,906.1 km = 6,378.137 + 21,528 km.)
+   The 2020 general SIS ICD (http://en.beidou.gov.cn/SYSTEMS/ICD/202008/P020200803539206360377.pdf, could
+   not be opened from here) is reported to give reference semi-major axes 27,906.1 km and 42,162.2 km.
    MEO Walker 24/3/1 and the 12 h 53 min (7/13 sidereal day) period: Januszewski (2016),
    https://transnav.eu/html,658.html (verified: "selected from the Walker 24/3/1 constellation"), and
    https://en.wikipedia.org/wiki/BeiDou (verified: 7/13 sidereal day, 7 sidereal day revisit period).
@@ -69,3 +72,11 @@ Data
                  ("All versions of Natural Earth raster + vector map data ... are in the public
                  domain"; attribution is not required, but optional: "Made with Natural Earth.")
    Turned into web/data/land_mask.json (1-degree grid) by tools/landmask.py.
+
+
+7. GPS almanacs (YUMA format) for GPS weeks 1003-1016 (28 March - 3 July 1999), the almanacs the FAA
+   report (item 2) used for its Table 2-1.
+   Local files:     web/data/almanac/1999/almanac.yuma.week<N>.<toa>.txt (14 files, downloaded 2026-10-31)
+   Downloaded from: https://celestrak.org/GPS/almanac/Yuma/1999/ (CelesTrak's archive of the US Coast
+                    Guard Navigation Center's weekly almanacs)
+   Used by web/sim/almanac.py and tools/reproduce_faa.py (results in web/data/faa_reproduction.json).

@@ -58,17 +58,21 @@ def dop_batch(unit_los, visible, enu):
     }
 
 
-def dop(unit_los, enu):
+def dop(unit_los, enu, estimate_clock=True):
     """DOP values from unit line-of-sight vectors (N x 3) and the ENU matrix (3 x 3).
 
-    Returns a dict with gdop, pdop, hdop, vdop, tdop. If fewer than 4 satellites
-    are given or the geometry is singular, every value is NaN.
+    Returns a dict with gdop, pdop, hdop, vdop, tdop. If too few satellites are given
+    (4, or 3 when the clock is known) or the geometry is singular, every value is NaN.
+
+    estimate_clock=False: the receiver clock is assumed known, so only x, y, z are solved
+    for (rows [-ex, -ey, -ez]); GDOP and TDOP are then not defined (NaN). Langley (1999)
+    uses this case to show how much the clock unknown costs in the vertical.
     """
     unit_los = np.asarray(unit_los, dtype=float).reshape(-1, 3)
-    if len(unit_los) < 4:
+    if len(unit_los) < (4 if estimate_clock else 3):
         return _undefined()
 
-    G = np.hstack([-unit_los, np.ones((len(unit_los), 1))])
+    G = np.hstack([-unit_los, np.ones((len(unit_los), 1))]) if estimate_clock else -unit_los
     GtG = G.T @ G
     if not np.isfinite(np.linalg.cond(GtG)) or np.linalg.cond(GtG) > MAX_COND:
         return _undefined()
@@ -77,9 +81,9 @@ def dop(unit_los, enu):
     Q_enu = enu @ Q[:3, :3] @ enu.T  # position block expressed in East, North, Up
 
     return {
-        "gdop": float(np.sqrt(np.trace(Q))),
+        "gdop": float(np.sqrt(np.trace(Q))) if estimate_clock else float("nan"),
         "pdop": float(np.sqrt(np.trace(Q[:3, :3]))),
         "hdop": float(np.sqrt(Q_enu[0, 0] + Q_enu[1, 1])),
         "vdop": float(np.sqrt(Q_enu[2, 2])),
-        "tdop": float(np.sqrt(Q[3, 3])),
+        "tdop": float(np.sqrt(Q[3, 3])) if estimate_clock else float("nan"),
     }

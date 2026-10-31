@@ -397,6 +397,41 @@ export function createGlobe(container, onPick, onHover, land, onSatClick) {
     });
   }
 
+  // ---- a map on the ground (the Compare tab's PDOP map) -------------------------------------------------------
+  // One square cell per grid point (cellDeg wide, centred on the point), coloured per cell, fixed to the
+  // Earth so it turns with it. Drawn just above the surface, semi-transparent so the continents show.
+  let groundMap = null;
+  function clearGroundMap() {
+    if (!groundMap) return;
+    earthGroup.remove(groundMap);
+    groundMap.geometry.dispose();
+    groundMap.material.dispose();
+    groundMap = null;
+  }
+  function setGroundMap({ lats, lons, colors, cellDeg }) {
+    clearGroundMap();
+    const r = 1.006, h = cellDeg / 2, pos = [], col = [];
+    const corner = (la, lo) => {
+      const a = (la * Math.PI) / 180, b = (lo * Math.PI) / 180;
+      return [r * Math.cos(a) * Math.cos(b), r * Math.sin(a), -r * Math.cos(a) * Math.sin(b)];     // same mapping as toScene
+    };
+    const c = new THREE.Color();
+    lats.forEach((la, k) => {
+      const lo = lons[k];
+      const p1 = corner(la - h, lo - h), p2 = corner(la - h, lo + h), p3 = corner(la + h, lo + h), p4 = corner(la + h, lo - h);
+      pos.push(...p1, ...p2, ...p3, ...p1, ...p3, ...p4);
+      c.set(colors[k]);
+      for (let v = 0; v < 6; v++) col.push(c.r, c.g, c.b);
+    });
+    const geom = new THREE.BufferGeometry();
+    geom.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+    geom.setAttribute("color", new THREE.Float32BufferAttribute(col, 3));
+    groundMap = new THREE.Mesh(geom, new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.6,
+                                                                   depthWrite: false, side: THREE.DoubleSide }));
+    groundMap.renderOrder = 0.5;
+    earthGroup.add(groundMap);
+  }
+
   /** Where satellite i is on screen, in pixels inside the container (for tests and debugging). */
   function screenOf(i) {
     camera.updateMatrixWorld();
@@ -406,6 +441,7 @@ export function createGlobe(container, onPick, onHover, land, onSatClick) {
 
   return { update, setConstellation, spawnTrials, clearTrials, screenOf, blockedLines: () => blockedCount,
            setPreview, clearPreview, previewCount: () => previewObjects.length,
+           setGroundMap, clearGroundMap, groundMapCells: () => (groundMap ? groundMap.geometry.attributes.position.count / 6 : 0),
            satColor: (i) => `#${sats[i].material.color.getHexString()}`,
            // for tests: the model's +z (antenna) and +y (wing) axes, and its position, in scene axes
            satAxes: (i) => { const e = sats[i].matrixWorld.elements; return { y: [e[4], e[5], e[6]], z: [e[8], e[9], e[10]], p: sats[i].position.toArray() }; } };

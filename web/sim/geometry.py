@@ -72,6 +72,24 @@ def enu_basis(lat_deg, lon_deg, t=0.0):
     return np.stack([east, north, up], axis=-2)
 
 
+def inertial_to_earth_fixed(positions, t):
+    """Rotate inertial positions (shape (..., N, 3)) at times t (shape (...) or a number) into the
+    Earth-fixed frame, in which longitude 0 lies along +x: a rotation by minus the Earth's angle."""
+    th = np.radians(earth_angle_deg(t))[..., None]
+    x, y, z = positions[..., 0], positions[..., 1], positions[..., 2]
+    return np.stack([np.cos(th) * x + np.sin(th) * y, -np.sin(th) * x + np.cos(th) * y, z], axis=-1)
+
+
+def earth_fixed_position(lat_deg, lon_deg):
+    """Receiver position (km) in the Earth-fixed frame (longitude 0 along +x), shape (..., 3)."""
+    return receiver_position(lat_deg, np.asarray(lon_deg) - EARTH_ANGLE_AT_EPOCH, 0.0)
+
+
+def earth_fixed_enu(lat_deg, lon_deg):
+    """East, North, Up unit vectors in the Earth-fixed frame, shape (..., 3, 3)."""
+    return enu_basis(lat_deg, np.asarray(lon_deg) - EARTH_ANGLE_AT_EPOCH, 0.0)
+
+
 def lat_lon(positions, t=0.0):
     """Earth-fixed latitude and longitude (degrees, longitude in [-180, 180)) of the point
     straight below each inertial position at time t (the inverse of receiver_position,

@@ -87,6 +87,51 @@ def orbit_paths(elements, n=181):
     return paths, ring_of
 
 
+def langley_checks():
+    """Langley (1999)'s worked DOP values, recomputed here. Each: case, quantity, published, ours."""
+    def sky(elevations, azimuths):
+        el, az = np.radians(elevations), np.radians(azimuths)
+        return np.stack([np.cos(el) * np.sin(az), np.cos(el) * np.cos(az), np.sin(el)], axis=1)   # east, north, up
+    enu = np.eye(3)                                     # directions already in local east, north, up
+    tetra = sky([90, -19.4712, -19.4712, -19.4712], [0, 0, 120, 240])
+    horizon = sky([90, 0, 0, 0], [0, 0, 120, 240])
+    fifteen = sky([90, 15, 15, 15], [0, 0, 120, 240])
+    rows = [
+        ("zenith + three at -19.47 deg (tetrahedron)", "GDOP", 1.581, dop(tetra, enu)["gdop"]),
+        ("zenith + three on the horizon", "GDOP", 1.732, dop(horizon, enu)["gdop"]),
+        ("zenith + three at 15 deg", "HDOP", 1.195, dop(fifteen, enu)["hdop"]),
+        ("zenith + three at 15 deg", "VDOP", 1.558, dop(fifteen, enu)["vdop"]),
+        ("zenith + three at 15 deg, clock known", "HDOP", 1.195, dop(fifteen, enu, estimate_clock=False)["hdop"]),
+        ("zenith + three at 15 deg, clock known", "VDOP", 0.913, dop(fifteen, enu, estimate_clock=False)["vdop"]),
+    ]
+    # highest elevation a GPS satellite reaches seen from the north pole ("about 45 deg")
+    el = presets.gps()
+    t = np.linspace(0.0, constellation.period(constellation.A_GPS), 2000)
+    rx, e = geometry.receiver_position(90.0, 0.0, t), geometry.enu_basis(90.0, 0.0, t)
+    _, elev, _ = geometry.look_angles(rx, constellation.positions(el, t), e)
+    rows.append(("highest elevation seen from the north pole (ideal GPS)", "max elevation (deg)", 45.0, float(elev.max())))
+    return json.dumps([{"case": c, "quantity": q, "published": p, "ours": float(o)} for c, q, p, o in rows])
+
+
+def fredericton_day():
+    """Langley's Figure 5: Fredericton (45.95 N, 66.64 W), all satellites above a 5 deg mask, one day in
+    early 1999 ("GDOP averages about two and never exceeds 3.5"). Recomputed with the week-1007 almanac
+    over the 24 h from its reference time (the article's exact day is not given)."""
+    from . import almanac
+    sats = almanac.load_week(1007)
+    t = sats[0]["toa"] + 60.0 * np.arange(1440)
+    lat, lon = 45.95, -66.64
+    rx, enu = geometry.earth_fixed_position(lat, lon), geometry.earth_fixed_enu(lat, lon)
+    pos = almanac.ecef_positions(sats, t)                                            # (1440, N, 3)
+    _, el, unit = geometry.look_angles(np.broadcast_to(rx, (1440, 3)), pos, np.broadcast_to(enu, (1440, 3, 3)))
+    from .dop import dop_batch
+    vis = el >= 5.0
+    g = dop_batch(unit, vis, np.broadcast_to(enu, (1440, 3, 3)))
+    return json.dumps({"gdop_mean": float(np.nanmean(g["gdop"])), "gdop_max": float(np.nanmax(g["gdop"])),
+                       "hdop_mean": float(np.nanmean(g["hdop"])), "visible_min": int(vis.sum(axis=1).min()),
+                       "visible_max": int(vis.sum(axis=1).max()), "published_gdop_mean": 2.0, "published_gdop_max": 3.5})
+
+
 def preview(elements_json, t_seconds):
     """What a set of satellites would look like if added, without adding them: one ring per distinct
     orbit, each satellite's position at time t, and its orbit normal (for the model's wings)."""
@@ -147,7 +192,7 @@ def common_period(elements_json):
 def preset_info():
     """The ready-made constellations: key, label, label prefix, system, number of satellites."""
     return json.dumps([{"key": key, "label": p["label"], "short": p["short"], "system": p["system"],
-                        "count": len(p["build"]())} for key, p in presets.PRESETS.items()])
+                        "model": p.get("model", p["system"]), "count": len(p["build"]())} for key, p in presets.PRESETS.items()])
 
 
 def preset_elements(key):

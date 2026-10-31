@@ -1,0 +1,405 @@
+******** Week 1003 almanac for PRN-01 ********
+ID:                         01
+Health:                     000
+Eccentricity:               4.7931671143E-003
+Time of Applicability(s):   503808.0000
+Orbital Inclination(rad):   0.9571525455
+Rate of Right Ascen(r/s):  -8.1946271990E-009
+SQRT(A)  (m^1/2):           5154.283691
+Right Ascen at TOA(rad):   -9.7879773378E-001
+Argument of Perigee(rad):  -1.679592490
+Mean Anom(rad):            -3.0252168179E+000
+Af0(s):                     7.9154968262E-005
+Af1(s/s):                   0.0000000000E+000
+week:                       1003
+
+******** Week 1003 almanac for PRN-02 ********
+ID:                         02
+Health:                     000
+Eccentricity:               1.8632888794E-002
+Time of Applicability(s):   503808.0000
+Orbital Inclination(rad):   0.9363659024
+Rate of Right Ascen(r/s):  -8.1717690392E-009
+SQRT(A)  (m^1/2):           5153.627930
+Right Ascen at TOA(rad):    1.0340996981E+000
+Argument of Perigee(rad):  -2.215318203
+Mean Anom(rad):            -9.0936303139E-001
+Af0(s):                    -4.2915344238E-005
+Af1(s/s):                  -3.6379788071E-012
+week:                       1003
+
+******** Week 1003 almanac for PRN-03 ********
+ID:                         03
+Health:                     000
+Eccentricity:               1.3012886047E-003
+Time of Applicability(s):   503808.0000
+Orbital Inclination(rad):   0.9459832311
+Rate of Right Ascen(r/s):  -8.4460660688E-009
+SQRT(A)  (m^1/2):           5153.618164
+Right Ascen at TOA(rad):    2.1162860394E+000
+Argument of Perigee(rad):   1.935798049
+Mean Anom(rad):             2.3536329269E+000
+Af0(s):                     1.0776519775E-004
+Af1(s/s):                   3.6379788071E-012
+week:                       1003
+
+******** Week 1003 almanac for PRN-04 ********
+ID:                         04
+Health:                     000
+Eccentricity:               5.0287246704E-003
+Time of Applicability(s):   503808.0000
+Orbital Inclination(rad):   0.9778732657
+Rate of Right Ascen(r/s):  -7.5888877404E-009
+SQRT(A)  (m^1/2):           5153.719238
+Right Ascen at TOA(rad):   -3.0764126778E+000
+Argument of Perigee(rad):  -0.690913796
+Mean Anom(rad):             1.3242362738E+000
+Af0(s):                     5.5122375488E-004
+Af1(s/s):                   1.0913936421E-011
+week:                       1003
+
+******** Week 1003 almanac for PRN-05 ********
+ID:                         05
+Health:                     000
+Eccentricity:               1.4610290527E-003
+Time of Applicability(s):   503808.0000
+Orbital Inclination(rad):   0.9392960668
+Rate of Right Ascen(r/s):  -8.1489108794E-009
+SQRT(A)  (m^1/2):           5153.661621
+Right Ascen at TOA(rad):    1.0523599386E+000
+Argument of Perigee(rad):  -0.004995175
+Mean Anom(rad):             1.3269994259E+000
+Af0(s):                     1.9359588623E-004
+Af1(s/s):                   3.6379788071E-012
+week:                       1003
+
+******** Week 1003 almanac for PRN-06 ********
+ID:                         06
+Health:                     000
+Eccentricity:               6.6375732422E-003
+Time of Applicability(s):   503808.0000
+Orbital Inclination(rad):   0.9534015059
+Rate of Right Ascen(r/s):  -8.3317761579E-009
+SQRT(A)  (m^1/2):           5153.681152
+Right Ascen at TOA(rad):    2.1552655697E+000
+Argument of Perigee(rad):  -2.495533943
+Mean Anom(rad):             2.1826918125E+000
+Af0(s):                     0.0000000000E+000
+Af1(s/s):                   0.0000000000E+000
+week:                       1003
+
+******** Week 1003 almanac for PRN-07 ********
+ID:                         07
+Health:                     000
+Eccentricity:               1.0233879089E-002
+Time of Applicability(s):   503808.0000
+Orbital Inclination(rad):   0.9553728700
+Rate of Right Ascen(r/s):  -8.3317761579E-009
+SQRT(A)  (m^1/2):           5153.549805
+Right Ascen at TOA(rad):    2.1233482361E+000
+Argument of Perigee(rad):  -2.166775703
+Mean Anom(rad):            -2.1427299976E+000
+Af0(s):                     8.1539154053E-004
+Af1(s/s):                   0.0000000000E+000
+week:                       1003
+
+******** Week 1003 almanac for PRN-08 ********
+ID:                         08
+Health:                     000
+Eccentricity:               9.4885826111E-003
+Time of Applicability(s):   503808.0000
+Orbital Inclination(rad):   0.9581412673
+Rate of Right Ascen(r/s):  -7.7603230508E-009
+SQRT(A)  (m^1/2):           5153.645996
+Right Ascen at TOA(rad):    7.2608299553E-002
+Argument of Perigee(rad):   1.795491934
+Mean Anom(rad):             9.3472838402E-002
+Af0(s):                     7.8678131104E-004
+Af1(s/s):                   3.6379788071E-012
+week:                       1003
+
+******** Week 1003 almanac for PRN-09 ********
+ID:                         09
+Health:                     000
+Eccentricity:               8.6503028870E-003
+Time of Applicability(s):   503808.0000
+Orbital Inclination(rad):   0.9439878464
+Rate of Right Ascen(r/s):  -7.8974720097E-009
+SQRT(A)  (m^1/2):           5153.578125
+Right Ascen at TOA(rad):    3.2340556383E-002
+Argument of Perigee(rad):   0.452286541
+Mean Anom(rad):             2.0294756889E+000
+Af0(s):                    -3.7193298340E-005
+Af1(s/s):                   0.0000000000E+000
+week:                       1003
+
+******** Week 1003 almanac for PRN-10 ********
+ID:                         10
+Health:                     000
+Eccentricity:               3.4899711609E-003
+Time of Applicability(s):   503808.0000
+Orbital Inclination(rad):   0.9700356126
+Rate of Right Ascen(r/s):  -7.8288975303E-009
+SQRT(A)  (m^1/2):           5153.645020
+Right Ascen at TOA(rad):   -2.0515413284E+000
+Argument of Perigee(rad):  -0.178706899
+Mean Anom(rad):            -7.8630071878E-001
+Af0(s):                     3.4332275391E-005
+Af1(s/s):                   0.0000000000E+000
+week:                       1003
+
+******** Week 1003 almanac for PRN-13 ********
+ID:                         13
+Health:                     000
+Eccentricity:               2.1471977234E-003
+Time of Applicability(s):   503808.0000
+Orbital Inclination(rad):   0.9611612558
+Rate of Right Ascen(r/s):  -8.1603399593E-009
+SQRT(A)  (m^1/2):           5153.709961
+Right Ascen at TOA(rad):   -1.0028411150E+000
+Argument of Perigee(rad):  -1.077909589
+Mean Anom(rad):            -2.3646561801E-001
+Af0(s):                    -8.9645385742E-005
+Af1(s/s):                  -2.1827872843E-011
+week:                       1003
+
+******** Week 1003 almanac for PRN-14 ********
+ID:                         14
+Health:                     000
+Eccentricity:               5.9700012207E-004
+Time of Applicability(s):   503808.0000
+Orbital Inclination(rad):   0.9756562114
+Rate of Right Ascen(r/s):  -7.7603230508E-009
+SQRT(A)  (m^1/2):           5153.626953
+Right Ascen at TOA(rad):   -2.0046372414E+000
+Argument of Perigee(rad):   2.618074894
+Mean Anom(rad):            -1.4957383871E+000
+Af0(s):                     1.7166137695E-005
+Af1(s/s):                   0.0000000000E+000
+week:                       1003
+
+******** Week 1003 almanac for PRN-15 ********
+ID:                         15
+Health:                     000
+Eccentricity:               7.1902275085E-003
+Time of Applicability(s):   503808.0000
+Orbital Inclination(rad):   0.9834159613
+Rate of Right Ascen(r/s):  -7.5431714208E-009
+SQRT(A)  (m^1/2):           5153.555664
+Right Ascen at TOA(rad):   -3.0358018875E+000
+Argument of Perigee(rad):   1.516321301
+Mean Anom(rad):             8.8271796703E-001
+Af0(s):                     6.6852569580E-004
+Af1(s/s):                   3.6379788071E-012
+week:                       1003
+
+******** Week 1003 almanac for PRN-16 ********
+ID:                         16
+Health:                     000
+Eccentricity:               3.8814544678E-003
+Time of Applicability(s):   503808.0000
+Orbital Inclination(rad):   0.9720429182
+Rate of Right Ascen(r/s):  -7.8060393705E-009
+SQRT(A)  (m^1/2):           5153.532227
+Right Ascen at TOA(rad):   -2.0004096031E+000
+Argument of Perigee(rad):   0.201089680
+Mean Anom(rad):             4.2954984307E-001
+Af0(s):                     1.0871887207E-004
+Af1(s/s):                   0.0000000000E+000
+week:                       1003
+
+******** Week 1003 almanac for PRN-17 ********
+ID:                         17
+Health:                     000
+Eccentricity:               1.0601520538E-002
+Time of Applicability(s):   503808.0000
+Orbital Inclination(rad):   0.9848241210
+Rate of Right Ascen(r/s):  -7.5088841811E-009
+SQRT(A)  (m^1/2):           5153.655762
+Right Ascen at TOA(rad):   -2.9976861477E+000
+Argument of Perigee(rad):   2.784148216
+Mean Anom(rad):             1.8069380522E+000
+Af0(s):                    -2.0694732666E-004
+Af1(s/s):                   0.0000000000E+000
+week:                       1003
+
+******** Week 1003 almanac for PRN-18 ********
+ID:                         18
+Health:                     000
+Eccentricity:               7.1420669556E-003
+Time of Applicability(s):   503808.0000
+Orbital Inclination(rad):   0.9466184378
+Rate of Right Ascen(r/s):  -8.2974889182E-009
+SQRT(A)  (m^1/2):           5153.719727
+Right Ascen at TOA(rad):   -1.0427081585E+000
+Argument of Perigee(rad):   1.791348100
+Mean Anom(rad):            -2.1513321400E+000
+Af0(s):                     2.2888183594E-005
+Af1(s/s):                   0.0000000000E+000
+week:                       1003
+
+******** Week 1003 almanac for PRN-19 ********
+ID:                         19
+Health:                     000
+Eccentricity:               4.8141479492E-003
+Time of Applicability(s):   503808.0000
+Orbital Inclination(rad):   0.9275814891
+Rate of Right Ascen(r/s):  -8.0803364000E-009
+SQRT(A)  (m^1/2):           5153.558105
+Right Ascen at TOA(rad):   -2.0447336137E-002
+Argument of Perigee(rad):  -2.769423723
+Mean Anom(rad):             1.4014989138E+000
+Af0(s):                    -1.2588500977E-004
+Af1(s/s):                  -3.6379788071E-012
+week:                       1003
+
+******** Week 1003 almanac for PRN-21 ********
+ID:                         21
+Health:                     000
+Eccentricity:               1.5025615692E-002
+Time of Applicability(s):   503808.0000
+Orbital Inclination(rad):   0.9694543481
+Rate of Right Ascen(r/s):  -7.8288975303E-009
+SQRT(A)  (m^1/2):           5153.637207
+Right Ascen at TOA(rad):   -2.0454571247E+000
+Argument of Perigee(rad):  -2.683321953
+Mean Anom(rad):            -6.2907218933E-001
+Af0(s):                     1.3351440430E-005
+Af1(s/s):                   0.0000000000E+000
+week:                       1003
+
+******** Week 1003 almanac for PRN-22 ********
+ID:                         22
+Health:                     000
+Eccentricity:               1.1896610260E-002
+Time of Applicability(s):   503808.0000
+Orbital Inclination(rad):   0.9361501932
+Rate of Right Ascen(r/s):  -8.2060562789E-009
+SQRT(A)  (m^1/2):           5153.579102
+Right Ascen at TOA(rad):    1.0482763052E+000
+Argument of Perigee(rad):   0.443279624
+Mean Anom(rad):            -1.1527479887E+000
+Af0(s):                     3.1375885010E-004
+Af1(s/s):                   3.2741809264E-011
+week:                       1003
+
+******** Week 1003 almanac for PRN-23 ********
+ID:                         23
+Health:                     000
+Eccentricity:               1.3743877411E-002
+Time of Applicability(s):   503808.0000
+Orbital Inclination(rad):   0.9724923372
+Rate of Right Ascen(r/s):  -7.8060393705E-009
+SQRT(A)  (m^1/2):           5153.589355
+Right Ascen at TOA(rad):   -2.0058848858E+000
+Argument of Perigee(rad):  -1.969953418
+Mean Anom(rad):            -7.7174365520E-001
+Af0(s):                     1.1444091797E-005
+Af1(s/s):                   0.0000000000E+000
+week:                       1003
+
+******** Week 1003 almanac for PRN-24 ********
+ID:                         24
+Health:                     000
+Eccentricity:               8.4562301636E-003
+Time of Applicability(s):   503808.0000
+Orbital Inclination(rad):   0.9877602458
+Rate of Right Ascen(r/s):  -7.4860260213E-009
+SQRT(A)  (m^1/2):           5153.516113
+Right Ascen at TOA(rad):   -3.0686118603E+000
+Argument of Perigee(rad):  -1.755113363
+Mean Anom(rad):             1.7439006567E+000
+Af0(s):                     5.4550170898E-004
+Af1(s/s):                   1.0913936421E-011
+week:                       1003
+
+******** Week 1003 almanac for PRN-25 ********
+ID:                         25
+Health:                     000
+Eccentricity:               7.4744224548E-003
+Time of Applicability(s):   503808.0000
+Orbital Inclination(rad):   0.9367913604
+Rate of Right Ascen(r/s):  -7.9660464891E-009
+SQRT(A)  (m^1/2):           5153.672363
+Right Ascen at TOA(rad):   -3.9986115880E-003
+Argument of Perigee(rad):  -2.352142096
+Mean Anom(rad):             3.0232973099E+000
+Af0(s):                     9.5367431641E-007
+Af1(s/s):                   0.0000000000E+000
+week:                       1003
+
+******** Week 1003 almanac for PRN-26 ********
+ID:                         26
+Health:                     000
+Eccentricity:               1.1138916016E-002
+Time of Applicability(s):   503808.0000
+Orbital Inclination(rad):   0.9601606131
+Rate of Right Ascen(r/s):  -8.1603399593E-009
+SQRT(A)  (m^1/2):           5153.529785
+Right Ascen at TOA(rad):   -9.9665725231E-001
+Argument of Perigee(rad):  -0.099439859
+Mean Anom(rad):            -2.4473791122E+000
+Af0(s):                     4.0054321289E-004
+Af1(s/s):                   4.3655745685E-011
+week:                       1003
+
+******** Week 1003 almanac for PRN-27 ********
+ID:                         27
+Health:                     000
+Eccentricity:               1.3328552246E-002
+Time of Applicability(s):   503808.0000
+Orbital Inclination(rad):   0.9411476254
+Rate of Right Ascen(r/s):  -7.9089010896E-009
+SQRT(A)  (m^1/2):           5153.634766
+Right Ascen at TOA(rad):    1.5434558503E-002
+Argument of Perigee(rad):  -2.938827515
+Mean Anom(rad):             8.7880623341E-001
+Af0(s):                     1.6212463379E-005
+Af1(s/s):                   0.0000000000E+000
+week:                       1003
+
+******** Week 1003 almanac for PRN-29 ********
+ID:                         29
+Health:                     000
+Eccentricity:               6.8373680115E-003
+Time of Applicability(s):   503808.0000
+Orbital Inclination(rad):   0.9567750692
+Rate of Right Ascen(r/s):  -8.2060562789E-009
+SQRT(A)  (m^1/2):           5153.470703
+Right Ascen at TOA(rad):   -1.0237172842E+000
+Argument of Perigee(rad):  -1.968701482
+Mean Anom(rad):            -2.4178133011E+000
+Af0(s):                     3.6334991455E-004
+Af1(s/s):                   2.5465851650E-011
+week:                       1003
+
+******** Week 1003 almanac for PRN-30 ********
+ID:                         30
+Health:                     000
+Eccentricity:               5.3973197937E-003
+Time of Applicability(s):   503808.0000
+Orbital Inclination(rad):   0.9465944171
+Rate of Right Ascen(r/s):  -8.0917654799E-009
+SQRT(A)  (m^1/2):           5153.598145
+Right Ascen at TOA(rad):    1.0806633234E+000
+Argument of Perigee(rad):   1.535161257
+Mean Anom(rad):            -8.0151581764E-001
+Af0(s):                    -1.3351440430E-005
+Af1(s/s):                   0.0000000000E+000
+week:                       1003
+
+******** Week 1003 almanac for PRN-31 ********
+ID:                         31
+Health:                     000
+Eccentricity:               8.9049339294E-003
+Time of Applicability(s):   503808.0000
+Orbital Inclination(rad):   0.9548215866
+Rate of Right Ascen(r/s):  -8.3432052378E-009
+SQRT(A)  (m^1/2):           5153.653809
+Right Ascen at TOA(rad):    2.1243736744E+000
+Argument of Perigee(rad):   0.782156825
+Mean Anom(rad):             2.9363646507E+000
+Af0(s):                     1.6212463379E-005
+Af1(s/s):                   0.0000000000E+000
+week:                       1003
+
