@@ -79,7 +79,29 @@ async function main() {
   let t = 0, playing = false, dirty = true, last = performance.now();
   let lastSnap = null;
   const hover = { i: -1, x: 0, y: 0 };            // satellite under the mouse (-1 = none)
-  let cons;                                       // the constellation (set up once the globe exists)
+  let cons, mc;                                   // the constellation and the Monte Carlo (set up once the globe exists)
+  let featured = null;                            // during a Monte Carlo run: the trial {lat, lon, t} the live view shows
+
+  // While a Monte Carlo run is going, the live view belongs to the run: the time, the receiver and the
+  // constellation cannot be changed, and about once a second the view jumps to one of the run's trials.
+  function setRunLocked(on) {
+    featured = null;
+    if (on) { playing = false; $("play").textContent = "Play"; }
+    for (const id of ["lat", "lon", "time", "play", "speed"]) $(id).disabled = on;
+    $("live-lock-note").hidden = !on;
+    $("live-lock-note").textContent = "Monte Carlo run in progress: the time and receiver follow its trials.";
+    cons.setLocked(on);
+    dirty = true;
+  }
+
+  function showFeatured(trial) {
+    featured = trial;
+    t = trial.t;
+    $("time").value = Math.floor((t % DAY) / 60);
+    $("live-lock-note").textContent = `Monte Carlo trial ${trial.index.toLocaleString()}: ` +
+      `latitude ${trial.lat.toFixed(1)}°, longitude ${trial.lon.toFixed(1)}°, day ${Math.floor(t / DAY)}.`;
+    dirty = true;
+  }
 
   function renderTip() {
     const tip = $("sat-tip");
@@ -102,19 +124,22 @@ async function main() {
     land,
     (i) => cons.toggleSat(i));
 
-  cons = initConstellation(api, { globe, onChange: () => { dirty = true; } });
+  cons = initConstellation(api, { globe, onChange: () => { dirty = true; if (mc) mc.refreshWindow(); } });
   cons.addPreset("gps");
   window.app = { api, globe, cons };       // for poking around in the browser console, and for browser tests
 
-  const mc = initMonteCarlo(globe, () => cons.activeElements());
+  mc = initMonteCarlo(globe, {
+    getElements: () => cons.activeElements(), api, onRunState: setRunLocked, onFeatured: showFeatured,
+  });
+  mc.refreshWindow();
   setupTabs((which) => {
     if (which === "mc") { mc.ensureWorker(); mc.redraw(); }
     if (which === "live") dirty = true;    // the sky plot was skipped while hidden; redraw it
   });
 
   function refresh() {
-    const lat = Math.max(-90, Math.min(90, parseFloat($("lat").value)));
-    const lon = parseFloat($("lon").value);
+    const lat = featured ? featured.lat : Math.max(-90, Math.min(90, parseFloat($("lat").value)));
+    const lon = featured ? featured.lon : parseFloat($("lon").value);
     if (!Number.isFinite(lat) || !Number.isFinite(lon)) return;
 
     const snap = cons.decorate(JSON.parse(api.snapshot(lat, lon, t)));   // add labels and colours

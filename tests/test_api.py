@@ -227,3 +227,55 @@ def test_monte_carlo_on_a_mixed_constellation_matches_the_analytic_mean():
 def test_monte_carlo_rejects_an_empty_constellation():
     with pytest.raises(ValueError):
         mc.MonteCarlo(10, elements=np.empty((0, 6)))
+
+
+# ---- the common repeat period and the time window ------------------------------------------------------
+
+def period_of(*keys):
+    el = np.vstack([presets.PRESETS[k]["build"]() for k in keys])
+    return json.loads(api.common_period(json.dumps(el.tolist())))
+
+
+def test_common_period_of_gps_alone_is_its_orbital_period():
+    r = period_of("gps")
+    assert r["found"] and math.isclose(r["seconds"], float(c.period(c.A_GPS))) and r["mismatch_deg"] < 1e-6
+
+
+def test_common_period_of_all_four_systems_is_70_sidereal_days():
+    r = period_of("gps", "galileo", "beidou_meo", "beidou_igso_geo")
+    assert r["found"]
+    assert abs(r["seconds"] / g.T_SIDEREAL - 70.0) < 1e-6 and abs(r["days"] - 69.81) < 0.01
+    assert r["mismatch_deg"] < 7.0                              # the three orbits that do not match exactly
+
+
+def test_common_period_with_no_satellites_or_no_repeat():
+    assert json.loads(api.common_period("[]"))["found"] is False
+    # eight unrelated orbit sizes: the chance that all eight line up within 0.03 orbits is negligible
+    odd = np.vstack([c.make_elements(a, 0.0, 55.0, 0.0, 0.0, 0.0) for a in (8123.4, 11234.5, 14567.8, 18901.2, 23456.7, 28901.2, 34567.8, 39876.5)])
+    r = json.loads(api.common_period(json.dumps(odd.tolist())))
+    assert r["found"] is False and "10 years" in r["reason"]
+
+
+def test_monte_carlo_points_carry_their_time_inside_the_window():
+    window = 3 * 86400.0
+    mc.mc_start(2000, 3, 6.0, 0.0, json.dumps(presets.gps().tolist()), window)
+    pts = json.loads(mc.mc_advance(500, True))["points"]
+    assert len(pts["t"]) == 500 and 0 <= min(pts["t"]) and max(pts["t"]) < window
+    assert json.loads(mc.mc_summary())["window_days"] == 3.0
+
+
+def test_window_spread_does_not_change_the_answer_for_a_mixed_constellation():
+    """PDOP statistics for windows of 7, 30, 120 and 365 days (and the common repeat period) agree
+    within sampling error: the window only has to be long enough to mix the satellites' phases."""
+    el = np.vstack([presets.gps(), presets.galileo(), presets.beidou_meo(), presets.beidou_igso_geo()])
+    lcm = json.loads(api.common_period(json.dumps(el.tolist())))["seconds"]
+    medians, means = [], []
+    for window in (7 * 86400.0, 30 * 86400.0, 120 * 86400.0, 365 * 86400.0, lcm):
+        run = mc.MonteCarlo(60_000, seed=11, elements=el, window_s=window)
+        run.advance(60_000)
+        pdop = run.dop["pdop"]
+        medians.append(float(np.nanmedian(pdop)))
+        means.append(float(run.n_visible.mean()))
+    print("median PDOP by window:", [round(x, 3) for x in medians])
+    assert max(medians) - min(medians) < 0.02
+    assert max(means) - min(means) < 0.15

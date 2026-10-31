@@ -22,6 +22,7 @@ export function initConstellation(api, hooks) {
   let groups = [];                // {id, label, color, preset (key) | null}
   let sats = [];                  // {label, group (id), enabled, elements}
   let nextGroupId = 1, nextColor = 0, customCount = 0, walkerCount = 0, customGroupId = null;
+  let locked = false;             // true while a Monte Carlo run is using the constellation: no changes
   const openGroups = new Set();
 
   const groupOf = (s) => groups.find((g) => g.id === s.group);
@@ -53,7 +54,7 @@ export function initConstellation(api, hooks) {
   }
 
   function addPreset(key) {
-    if (groups.some((g) => g.preset === key)) return;
+    if (locked || groups.some((g) => g.preset === key)) return;
     const info = presetList.find((p) => p.key === key);
     const data = JSON.parse(api.preset_elements(key));
     room(data.elements.length);
@@ -64,6 +65,7 @@ export function initConstellation(api, hooks) {
   }
 
   function removeGroup(id) {
+    if (locked) return;
     groups = groups.filter((g) => g.id !== id);
     sats = sats.filter((s) => s.group !== id);
     if (id === customGroupId) customGroupId = null;
@@ -71,6 +73,7 @@ export function initConstellation(api, hooks) {
   }
 
   function addCustomSatellite(elements) {
+    if (locked) return "";
     room(1);
     if (customGroupId === null || !groups.some((g) => g.id === customGroupId)) {
       customGroupId = nextGroupId++;
@@ -83,6 +86,7 @@ export function initConstellation(api, hooks) {
   }
 
   function addWalker(T, P, F, data) {
+    if (locked) return;
     room(data.elements.length);
     walkerCount += 1;
     const group = { id: nextGroupId++, label: `Walker ${T}/${P}/${F} (#${walkerCount})`, color: customColor(), preset: null };
@@ -92,15 +96,17 @@ export function initConstellation(api, hooks) {
   }
 
   function toggleSat(i) {
-    if (sats[i]) { sats[i].enabled = !sats[i].enabled; changed(); }
+    if (!locked && sats[i]) { sats[i].enabled = !sats[i].enabled; changed(); }
   }
 
   function setGroupEnabled(id, on) {
+    if (locked) return;
     sats.forEach((s) => { if (s.group === id) s.enabled = on; });
     changed();
   }
 
   function deleteSat(i) {
+    if (locked) return;
     const id = sats[i].group;
     sats.splice(i, 1);
     if (!sats.some((s) => s.group === id)) groups = groups.filter((g) => g.id !== id);
@@ -108,6 +114,7 @@ export function initConstellation(api, hooks) {
   }
 
   function reset() {
+    if (locked) return;
     groups = []; sats = []; customGroupId = null; customCount = 0; walkerCount = 0; nextColor = 0;
     addPreset("gps");
   }
@@ -161,7 +168,20 @@ export function initConstellation(api, hooks) {
     $("cs-count").textContent = `(${sats.filter((s) => s.enabled).length} on of ${sats.length})`;
   }
 
-  function render() { renderPresets(); renderList(); }
+  function render() { renderPresets(); renderList(); applyLock(); }
+
+  // While locked every control in the tab is disabled; unlocking brings back the forms' own on/off state.
+  function applyLock() {
+    if (locked) $("tab-cs").querySelectorAll("input, button").forEach((el) => { el.disabled = true; });
+  }
+
+  function setLocked(on) {
+    locked = on;
+    $("cs-lock-note").hidden = !on;
+    if (!on) $("tab-cs").querySelectorAll("input, button").forEach((el) => { el.disabled = false; });
+    render();
+    if (!on) { updateSatelliteForm(); updateWalkerForm(); }      // the Add buttons depend on the forms being valid
+  }
 
   // ---- the controls ------------------------------------------------------------------------------------------
   const message = (id, text, isError) => { $(id).textContent = text; $(id).classList.toggle("err", isError); };
@@ -248,5 +268,5 @@ export function initConstellation(api, hooks) {
   updateSatelliteForm();
   updateWalkerForm();
 
-  return { addPreset, toggleSat, decorate, activeElements, count: () => sats.length };
+  return { addPreset, toggleSat, setLocked, decorate, activeElements, count: () => sats.length };
 }
