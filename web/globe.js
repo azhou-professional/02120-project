@@ -3,6 +3,7 @@ import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { PLANE_COLORS } from "./skyplot.js";
 import { trialColor, rgb01, FADE } from "./trialcolors.js";
+import { buildEarthGeometry } from "./earth.js";
 
 const R_EARTH = 6378.137;      // km; scene units are Earth radii
 const K = 1 / R_EARTH;
@@ -12,7 +13,8 @@ const toScene = (p) => new THREE.Vector3(p[0] * K, p[2] * K, -p[1] * K);
 
 // onPick(lat, lon): the Earth was clicked.
 // onHover(i, x, y): satellite i (or -1 for none) is under the mouse, at (x, y) pixels inside the container.
-export function createGlobe(container, onPick, onHover) {
+// land: the land/ocean grid from earth.js (or null for a plain sphere).
+export function createGlobe(container, onPick, onHover, land) {
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(45, 1, 0.01, 100);
   camera.position.set(6, 4, 9);
@@ -31,18 +33,26 @@ export function createGlobe(container, onPick, onHover) {
   sun.position.set(5, 3, 4);
   scene.add(sun);
 
-  // Earth with a lat/lon graticule every 30 degrees (equator and prime meridian highlighted)
+  // Everything fixed to the ground (the Earth, its graticule, Monte-Carlo dots) lives in
+  // earthGroup, which is turned each update by the Earth's rotation angle from Python.
+  // Satellites, orbit rings and the receiver marker are in the inertial frame (scene level).
+  const earthGroup = new THREE.Group();
+  scene.add(earthGroup);
+
+  // Low-poly Earth (land/ocean from the land grid) with a lat/lon graticule every 30 degrees
+  // (equator and prime meridian highlighted). Without the land grid: a plain dark-blue sphere.
   const earth = new THREE.Mesh(
-    new THREE.SphereGeometry(1, 64, 48),
-    new THREE.MeshPhongMaterial({ color: 0x1b3550, shininess: 8 }));
-  scene.add(earth);
-  addGraticule(scene);
+    land ? buildEarthGeometry(land) : new THREE.SphereGeometry(1, 64, 48),
+    land ? new THREE.MeshPhongMaterial({ vertexColors: true, flatShading: true, shininess: 4, specular: 0x111111 })
+         : new THREE.MeshPhongMaterial({ color: 0x1b3550, shininess: 8 }));
+  earthGroup.add(earth);
+  addGraticule(earthGroup);
 
   // North pole marker so orientation is clear
   const pole = new THREE.Line(
     new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, 1, 0), new THREE.Vector3(0, 1.35, 0)]),
     new THREE.LineBasicMaterial({ color: 0xffffff }));
-  scene.add(pole);
+  earthGroup.add(pole);
 
   // Receiver marker
   const receiver = new THREE.Mesh(
@@ -82,7 +92,7 @@ export function createGlobe(container, onPick, onHover) {
   }));
   dots.renderOrder = 1;
   dots.frustumCulled = false;
-  scene.add(dots);
+  earthGroup.add(dots);                     // trial dots are ground-fixed, so they turn with the Earth
 
   const flashPos = new Float32Array(CAP_FLASH * 3);
   const flashCol = new Float32Array(CAP_FLASH * 3);
@@ -112,7 +122,7 @@ export function createGlobe(container, onPick, onHover) {
   const flashes = new THREE.Points(flashGeom, flashMat);
   flashes.renderOrder = 2;
   flashes.frustumCulled = false;
-  scene.add(flashes);
+  earthGroup.add(flashes);
 
   // The flash buffer is a ring: slots head..tail-1 are live, in birth order.
   let head = 0, tail = 0, dotCount = 0;
@@ -233,6 +243,8 @@ export function createGlobe(container, onPick, onHover) {
     }
     planes = snap.planes;
     visible = snap.visible;
+    // Rotation about physical +z equals rotation about scene +y (the mapping toScene is a proper rotation)
+    earthGroup.rotation.y = (snap.earth_angle_deg * Math.PI) / 180;
     const rx = toScene(snap.receiver);
     receiver.position.copy(rx);
 
@@ -270,9 +282,11 @@ export function createGlobe(container, onPick, onHover) {
                                         -((e.clientY - r.top) / r.height) * 2 + 1), camera);
     const hit = ray.intersectObject(earth)[0];
     if (!hit) return;
-    // Inverse of toScene: scene (x, y, z) -> physical (x, -z, y)
-    const x = hit.point.x, y = -hit.point.z, z = hit.point.y;
-    onPick(Math.asin(z / hit.point.length()) * 180 / Math.PI, Math.atan2(y, x) * 180 / Math.PI);
+    // Undo the Earth's current rotation to get Earth-fixed coordinates, then invert toScene:
+    // scene (x, y, z) -> physical (x, -z, y)
+    const p = earthGroup.worldToLocal(hit.point.clone());
+    const x = p.x, y = -p.z, z = p.y;
+    onPick(Math.asin(z / p.length()) * 180 / Math.PI, Math.atan2(y, x) * 180 / Math.PI);
   });
 
   function resize() {

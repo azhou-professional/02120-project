@@ -4,6 +4,7 @@ import { createGlobe } from "./globe.js";
 import { drawSkyplot, PLANE_COLORS } from "./skyplot.js";
 import { loadSim } from "./pyloader.js";
 import { initMonteCarlo } from "./mc.js";
+import { loadLandMask } from "./earth.js";
 
 const $ = (id) => document.getElementById(id);
 const DAY = 86400;
@@ -30,10 +31,17 @@ const lonText = (x) => `${nf(Math.abs(x), 1)}° ${x >= 0 ? "E" : "W"}`;
 
 /** HTML for the satellite hover tooltip; every number comes from Python's snapshot. */
 function satelliteInfoHtml(s, i) {
-  const [a, inc, raan] = s.elements[i];
+  const [a, ecc, inc, raan, argp] = s.elements[i];
   const plane = s.planes[i];
+  const circular = ecc === 0;
   const rows = [
-    ["Orbit radius", `${nf(a, 1)} km (altitude ${nf(a - s.r_earth_km, 1)} km)`],
+    circular
+      ? ["Orbit radius", `${nf(a, 1)} km (altitude ${nf(a - s.r_earth_km, 1)} km)`]
+      : ["Semi-major axis", `${nf(a, 1)} km, eccentricity ${nf(ecc, 3)}`],
+    ...(circular ? [] : [
+      ["Perigee / apogee", `${nf(s.perigee_alt_km[i], 0)} km / ${nf(s.apogee_alt_km[i], 0)} km altitude`],
+      ["Arg. of perigee", `${nf(argp, 1)}°`],
+      ["Altitude now", `${nf(s.radius_km[i] - s.r_earth_km, 0)} km`]]),
     ["Inclination", `${nf(inc, 1)}°`],
     ["RAAN (plane)", `${nf(raan, 1)}°`],
     ["Angle along orbit now", `${nf(s.u_deg[i], 1)}° from ascending node`],
@@ -63,6 +71,7 @@ function setupTabs(onShow) {
 
 async function main() {
   const api = await loadPython();
+  const land = await loadLandMask("data/land_mask.json").catch((e) => { console.warn("no land grid:", e); return null; });
   $("status").textContent = "Ready.";
 
   let t = 0, playing = false, dirty = true, last = performance.now();
@@ -86,7 +95,8 @@ async function main() {
       $("lon").value = lon.toFixed(2);
       dirty = true;
     },
-    (i, x, y) => { Object.assign(hover, { i, x, y }); renderTip(); });
+    (i, x, y) => { Object.assign(hover, { i, x, y }); renderTip(); },
+    land);
   globe.addRings(JSON.parse(api.orbit_rings()));
 
   const mc = initMonteCarlo(globe);
@@ -106,7 +116,7 @@ async function main() {
     renderTip();
     drawSkyplot($("sky"), snap);
 
-    $("tlabel").textContent = `t = ${hms(t)} after start`;
+    $("tlabel").textContent = `Day ${Math.floor(t / DAY)}  ${hms(t % DAY)}`;
     $("mask").textContent = snap.mask_deg;
     $("n").textContent = snap.n_visible;
     for (const k of ["gdop", "pdop", "hdop", "vdop", "tdop"]) $(k).textContent = fmt(snap.dop[k]);
@@ -121,7 +131,9 @@ async function main() {
   }
 
   for (const id of ["lat", "lon"]) $(id).addEventListener("input", () => { dirty = true; });
-  $("time").addEventListener("input", () => { t = parseFloat($("time").value) * 60; dirty = true; });
+  // The slider sets the time of day within the current day; Play runs on past midnight (the Earth
+  // does not rotate 360 degrees in exactly 24 h, so wrapping would make it jump).
+  $("time").addEventListener("input", () => { t = Math.floor(t / DAY) * DAY + parseFloat($("time").value) * 60; dirty = true; });
   $("play").addEventListener("click", () => {
     playing = !playing;
     $("play").textContent = playing ? "Pause" : "Play";
@@ -133,8 +145,8 @@ async function main() {
     const dt = (now - last) / 1000;
     last = now;
     if (playing) {
-      t = (t + dt * parseFloat($("speed").value)) % DAY;
-      $("time").value = Math.floor(t / 60);
+      t += dt * parseFloat($("speed").value);
+      $("time").value = Math.floor((t % DAY) / 60);
       dirty = true;
     }
     if (dirty) { dirty = false; refresh(); }

@@ -82,9 +82,10 @@ def test_dop_identities_on_real_constellation():
 
 def test_snapshot_contains_orbit_information_for_the_tooltip():
     s = snap(40.4, -80.0, 12345.0)
-    for key in ("elements", "period_s", "speed_kms", "u_deg", "sat_lat", "sat_lon"):
+    for key in ("elements", "period_s", "speed_kms", "u_deg", "nu_deg", "radius_km", "perigee_alt_km",
+                "apogee_alt_km", "sat_lat", "sat_lon"):
         assert len(s[key]) == 24, key
-    assert np.allclose(s["elements"][0], [26559.7, 55.0, 0.0, 0.0])
+    assert np.allclose(s["elements"][0], [26559.7, 0.0, 55.0, 0.0, 0.0, 0.0])    # a, e, i, RAAN, argp, M0
     assert abs(s["period_s"][0] / 3600 - 11.967) < 0.01
     assert abs(s["speed_kms"][0] - 3.87) < 0.01
     assert s["r_earth_km"] == 6378.137
