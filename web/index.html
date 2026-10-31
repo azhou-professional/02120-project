@@ -1,0 +1,193 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GPS DOP Simulator</title>
+<style>
+  :root {
+    --bg: #0f1419; --panel: #171d25; --line: #2a3441; --text: #dfe6ee; --muted: #8b98a8;
+    --accent: #4fc3f7;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font: 14px/1.4 system-ui, sans-serif; }
+  main { display: grid; grid-template-columns: 1fr 340px; height: 100vh; }
+  #globe { position: relative; min-height: 0; }
+  #globe canvas { display: block; }
+  aside { background: var(--panel); border-left: 1px solid var(--line); padding: 14px 16px;
+          overflow-y: auto; }
+  h1 { font-size: 17px; margin: 0 0 2px; }
+  h2 { font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted);
+       margin: 16px 0 6px; }
+  .sub { color: var(--muted); font-size: 12px; margin-bottom: 8px; }
+  .row { display: flex; gap: 8px; align-items: center; margin: 6px 0; }
+  .row label { width: 64px; color: var(--muted); }
+  input[type=number], select { background: var(--bg); color: var(--text); border: 1px solid var(--line);
+         border-radius: 4px; padding: 4px 6px; width: 100%; }
+  input[type=range] { width: 100%; }
+  button { background: var(--accent); color: #06222e; border: 0; border-radius: 4px;
+           padding: 5px 14px; font-weight: 600; cursor: pointer; }
+  #status { color: var(--muted); font-size: 12px; margin-top: 4px; }
+  #readout { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+  .stat { background: var(--bg); border: 1px solid var(--line); border-radius: 6px;
+          padding: 6px 8px; }
+  .stat b { display: block; font-size: 18px; font-variant-numeric: tabular-nums; }
+  .stat span { color: var(--muted); font-size: 11px; }
+  canvas#sky { width: 100%; aspect-ratio: 1; display: block; }
+  table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+  td, th { text-align: right; padding: 2px 4px; border-bottom: 1px solid var(--line); font-size: 12px; }
+  th { color: var(--muted); font-weight: 500; }
+  td:first-child, th:first-child { text-align: left; }
+  .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 6px; }
+  #sat-tip { position: absolute; z-index: 5; pointer-events: none; background: rgba(23, 29, 37, .96);
+             border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; font-size: 12px;
+             max-width: 280px; box-shadow: 0 2px 10px rgba(0, 0, 0, .4); }
+  #sat-tip .name { font-size: 14px; font-weight: 600; margin-bottom: 4px; }
+  #sat-tip table td { border: 0; padding: 1px 0; text-align: left; vertical-align: top; }
+  #sat-tip table td:first-child { color: var(--muted); padding-right: 10px; white-space: nowrap; }
+  .tabs { display: flex; gap: 4px; margin: 10px 0 0; border-bottom: 1px solid var(--line); }
+  .tab { background: none; color: var(--muted); border-radius: 4px 4px 0 0; padding: 6px 12px;
+         font-weight: 500; border-bottom: 2px solid transparent; }
+  .tab.active { color: var(--text); border-bottom-color: var(--accent); }
+  [hidden] { display: none !important; }
+  .row label.chk { width: auto; color: var(--text); display: flex; gap: 6px; align-items: center; }
+  input[type=checkbox] { width: auto; }
+  input:disabled, button:disabled { opacity: .5; cursor: not-allowed; }
+  #mc-rate-num { width: 84px; flex: none; }
+  #mc-n { width: 110px; flex: none; }
+  progress { flex: 1; height: 10px; accent-color: var(--accent); }
+  .legend { margin: 6px 0; font-size: 11px; color: var(--muted); }
+  .legend .bar { height: 10px; border-radius: 3px; margin: 3px 0; }
+  .legend .scale { display: flex; justify-content: space-between; }
+  .legend .keys { display: flex; gap: 14px; margin-top: 4px; }
+  .legend .keys .dot { margin-right: 4px; }
+  .kv td:last-child { font-variant-numeric: tabular-nums; }
+  canvas.hist { width: 100%; height: 150px; display: block; }
+  .caption { color: var(--muted); font-size: 12px; min-height: 18px; margin-bottom: 4px; }
+  @media (max-width: 800px) {
+    main { grid-template-columns: 1fr; height: auto; }
+    #globe { height: 60vh; }
+    aside { border-left: 0; border-top: 1px solid var(--line); }
+  }
+</style>
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+} }
+</script>
+<script src="https://cdn.jsdelivr.net/pyodide/v0.26.4/full/pyodide.js"></script>
+</head>
+<body>
+<main>
+  <div id="globe"><div id="sat-tip" hidden></div></div>
+  <aside>
+    <h1>GPS DOP Simulator</h1>
+    <div class="sub">Nonrotating Earth, 24 GPS satellites (Walker 24/6/1). Drag to rotate, scroll to zoom, click the globe to place the receiver.</div>
+    <div id="status">Loading Python (Pyodide)…</div>
+
+    <div class="tabs" role="tablist">
+      <button class="tab active" id="tab-btn-live" role="tab" aria-selected="true">Live</button>
+      <button class="tab" id="tab-btn-mc" role="tab" aria-selected="false">Monte Carlo</button>
+    </div>
+
+    <section id="tab-live">
+    <h2>Receiver</h2>
+    <div class="row"><label for="lat">Lat (°)</label><input id="lat" type="number" step="0.1" min="-90" max="90" value="40.44"></div>
+    <div class="row"><label for="lon">Lon (°)</label><input id="lon" type="number" step="0.1" min="-180" max="180" value="-79.94"></div>
+
+    <h2>Time</h2>
+    <div class="row"><input id="time" type="range" min="0" max="1439" step="1" value="0"></div>
+    <div class="row"><span id="tlabel" style="color:var(--muted)">t = 00:00:00</span></div>
+    <div class="row">
+      <button id="play">Play</button>
+      <select id="speed">
+        <option value="60">60× (1 min/s)</option>
+        <option value="300" selected>300× (5 min/s)</option>
+        <option value="1000">1000×</option>
+        <option value="3000">3000×</option>
+      </select>
+    </div>
+
+    <h2>Results (elevation mask <span id="mask">0</span>°)</h2>
+    <div id="readout">
+      <div class="stat"><b id="n">–</b><span>satellites</span></div>
+      <div class="stat"><b id="gdop">–</b><span>GDOP</span></div>
+      <div class="stat"><b id="pdop">–</b><span>PDOP</span></div>
+      <div class="stat"><b id="hdop">–</b><span>HDOP</span></div>
+      <div class="stat"><b id="vdop">–</b><span>VDOP</span></div>
+      <div class="stat"><b id="tdop">–</b><span>TDOP</span></div>
+    </div>
+
+    <h2>Sky plot</h2>
+    <canvas id="sky"></canvas>
+
+    <h2>Visible satellites</h2>
+    <table id="sats"><thead><tr><th>Sat</th><th>Az (°)</th><th>El (°)</th></tr></thead><tbody></tbody></table>
+    </section>
+
+    <section id="tab-mc" hidden>
+      <div class="sub">Random receiver locations (uniform over the sphere's surface) at random times. For each trial: how many satellites are in view, and what is the DOP?</div>
+      <div id="mc-status">Open this tab to load the Monte-Carlo engine.</div>
+
+      <h2>Run</h2>
+      <div class="row"><label for="mc-n">Trials</label>
+        <input id="mc-n" type="number" min="1" max="1000000" step="1" value="10000">
+        <select id="mc-preset" aria-label="Trial count presets">
+          <option value="">presets…</option><option>100</option><option>1000</option><option>10000</option>
+          <option>100000</option><option>1000000</option>
+        </select></div>
+      <div class="row"><label for="mc-seed">Seed</label><input id="mc-seed" type="number" min="0" step="1" placeholder="blank = random"></div>
+      <div class="row"><label for="mc-pdop">Good if</label><span style="color:var(--muted);white-space:nowrap">≥ 4 sats and PDOP ≤</span>
+        <input id="mc-pdop" type="number" min="1.1" step="0.1" value="6"></div>
+      <div class="row"><label for="mc-dop">Plot</label>
+        <select id="mc-dop"><option value="gdop">GDOP</option><option value="pdop" selected>PDOP</option>
+          <option value="hdop">HDOP</option><option value="vdop">VDOP</option><option value="tdop">TDOP</option></select></div>
+
+      <h2>Show trials on the globe</h2>
+      <div class="row"><label class="chk"><input id="mc-viz" type="checkbox"> Visualize trials (each flash lasts 0.5 s)</label></div>
+      <div class="row"><label for="mc-rate">Trials/s</label>
+        <input id="mc-rate" type="range" min="0" max="1000" value="697" disabled>
+        <input id="mc-rate-num" type="number" min="1" max="2000" step="1" value="200" disabled></div>
+      <div class="legend" id="mc-legend" hidden>
+        <div>Flash colour = PDOP</div>
+        <div class="bar" id="mc-legend-bar"></div>
+        <div class="scale"><span>1</span><span id="mc-legend-mid"></span><span id="mc-legend-hi"></span></div>
+        <div>Earlier trials keep their colour, darkened</div>
+        <div class="bar" id="mc-legend-bar-old"></div>
+        <div class="keys">
+          <span><span class="dot" id="mc-legend-undef"></span>&lt; 4 satellites (no DOP)</span>
+        </div>
+      </div>
+
+      <div class="row"><button id="mc-run" disabled>Run</button><progress id="mc-progress" max="1" value="0"></progress></div>
+
+      <h2>Results <span id="mc-mask-note"></span></h2>
+      <table class="kv"><tbody>
+        <tr><td>Trials done</td><td id="r-done">–</td></tr>
+        <tr><td>Seed used</td><td id="r-seed">–</td></tr>
+        <tr><td>Satellites in view, mean ± SE</td><td id="r-mean">–</td></tr>
+        <tr><td>Analytic mean (check)</td><td id="r-check">–</td></tr>
+        <tr><td>Satellites in view, min / max</td><td id="r-minmax">–</td></tr>
+        <tr><td>Trials with ≥ 4 satellites</td><td id="r-ge4">–</td></tr>
+        <tr><td id="r-avail-label">Good positioning</td><td id="r-avail">–</td></tr>
+        <tr><td class="r-dop-name">DOP</td><td id="r-undef">–</td></tr>
+        <tr><td class="r-dop-name">median</td><td id="r-med">–</td></tr>
+        <tr><td class="r-dop-name">95th percentile</td><td id="r-p95">–</td></tr>
+        <tr><td class="r-dop-name">99th percentile</td><td id="r-p99">–</td></tr>
+        <tr><td class="r-dop-name">max</td><td id="r-max">–</td></tr>
+      </tbody></table>
+
+      <h2>Satellites in view</h2>
+      <canvas class="hist" id="hist-n"></canvas>
+      <div class="caption" id="cap-n"></div>
+      <h2><span id="hist-dop-title">PDOP</span> distribution</h2>
+      <canvas class="hist" id="hist-dop"></canvas>
+      <div class="caption" id="cap-dop"></div>
+    </section>
+  </aside>
+</main>
+<script type="module" src="main.js"></script>
+</body>
+</html>
