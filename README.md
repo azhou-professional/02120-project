@@ -46,6 +46,10 @@ handles the controls.
 | Low-poly satellite models (GPS III, Galileo, BeiDou-3, generic) and the dialog's card pictures | `web/satmodels.js`, `web/thumbs.js` |
 | Monte Carlo runs in a Web Worker with its own Pyodide | `web/mc-worker.js`, `web/pyloader.js` |
 | Low-poly Earth: mesh and land colouring | `web/earth.js` |
+| Sun and Moon positions (for the picture only) | `web/sim/ephemeris.py` |
+| Low-poly Moon coloured from a real brightness map; the Settings tab (Sun, Moon, sunlight) | `web/moon.js`, `web/globe.js`, `web/main.js` |
+| Moon brightness grid made from the NASA LRO map | `tools/moonmap.py` (reads `data/moon/lroc_color_poles_1k.jpg`, writes `web/data/moon_albedo.json`) |
+| Page icon | `web/favicon.svg` |
 | Land/ocean grid made from the Natural Earth outlines | `tools/landmask.py` (reads `data/ne_110m_land.geojson`, writes `web/data/land_mask.json`) |
 | Real GPS orbits from 1999 almanacs (IS-GPS-200 algorithm) | `web/sim/almanac.py`, almanacs in `web/data/almanac/1999/` |
 | The FAA's coverage method; the reproduction of its Table 2-1 | `web/sim/faa.py`, `tools/reproduce_faa.py` -> `web/data/faa_reproduction.json` |
@@ -58,6 +62,10 @@ Earth). The web app does not use it.
 
 The satellite models are drawn far larger than life (at true size they would be invisible). Their bodies point at the
 Earth and their solar wings lie along the orbit normal; this is only for the picture and does not affect any result.
+
+The Sun and the Moon (Settings tab) are also only for the picture (A21). With "Light the scene from the Sun" on, the
+light comes from the computed Sun, so the Earth shows day and night and the Moon its phase; switched off, a fixed
+light from the upper right lights everything evenly, as before. The Earth casts no shadow (no eclipses are drawn).
 
 ## Assumptions
 
@@ -77,6 +85,7 @@ whenever an assumption changes, the table is edited and the change is added to t
 | A18 | **Terrain: a cone-shaped valley** around the receiver (Stage 4) | the walls rise to the same angle in every direction (0-80 deg), so the terrain acts exactly like an elevation mask of that angle; the Monte Carlo uses the same valley at every trial. Satellites behind the walls are fully hidden: no diffraction, no partial blocking, no reflections (multipath). Other shapes (a straight valley, a city street) would make the angle depend on direction; the code has a hook for that (`geometry.blocking_angle`) | `geometry.blocking_angle`, `api.set_terrain`, Terrain tab |
 | A19 | **Real 1999 GPS orbits** (Stage 5) come from the weekly almanacs, propagated with the standard almanac algorithm of IS-GPS-200 (Kepler orbit, drifting orbit plane, GPS's mu = 3.986005e14 m^3/s^2 and Earth rate 7.2921151467e-5 rad/s) | only the satellites flagged healthy; GPS time is taken as UTC + 13 s (1999). For the live 'GPS 1999' preset the plane drift (about -0.04 deg/day) is left out, so the satellites are exactly where the almanac puts them on 1999-05-01 19:50 UTC and drift from it by about 18 km per day | `almanac.py`, `presets.gps_1999` |
 | A20 | **FAA coverage method as reproduced** | 5 deg grid (2,376 points, 80S-80N), every minute for 24 h, 5 deg mask, good = 4+ satellites and PDOP <= 6; receivers on our sphere (the FAA presumably used the WGS-84 ellipsoid). The report does not say which day of each week was used: we use the 24 h from each almanac's reference time. It does not define 'global 99.9% PDOP' either: the mean over grid points of each point's own 99.9% PDOP reproduces its values, while pooling all point-minutes comes out about 0.8 higher; this definition is inferred from the data | `faa.py` |
+| A21 | **Sun and Moon** (drawing only: they block no satellite and change no DOP or coverage result) | Sun: Meeus ch. 25 (about 0.01 deg; matches his Example 25.a to 0.00001 deg). Moon: the Astronomical Almanac's low-precision series (6 + 4 + 4 terms; about 0.3 deg in direction and 0.2% in distance, 1950-2050; within 0.1 deg and 0.1% of Meeus's Example 47.a). Both use UTC where the methods want Terrestrial Time (about 69 s apart). The Moon is drawn at its true distance and size (radius 1,737.4 km) with its near side toward the Earth and its north along the ecliptic pole (the real axis is 1.5 deg away); libration (the Moon's +-7 deg wobble) is ignored. The Sun is drawn in its true direction at its true angular radius (0.267 deg), on a sphere of 600 Earth radii | `ephemeris.py`, `web/globe.js` |
 | A5 | **Receiver**: on the sphere's surface, fixed to the ground | height 0; no antenna, multipath or motion | `geometry.receiver_position` |
 | A6 | **Visibility**: a satellite is usable if it is switched on and its elevation is at or above the terrain's blocking angle | elevation measured from the local horizontal plane of the sphere. With the Terrain tab's valley off, the blocking angle is 0 deg (the geometric horizon); with it on, it is the valley's wall angle (A18). No refraction or signal-strength limits | `api.snapshot`, `geometry.blocking_angle`, `geometry.look_angles` |
 | A7 | **Only geometry is modelled** | DOP is computed from satellite directions alone, with all satellites weighted equally (no elevation-dependent weighting, ranging-error model, ionosphere, troposphere or ephemeris/clock errors) | `dop.py` |
@@ -93,6 +102,7 @@ Newest first. Each entry says what changed and why.
 
 | Date | Change | Why / effect |
 |---|---|---|
+| 2026-10-31 | **A21 added**: the Sun and the Moon are drawn, and the scene can be lit from the real Sun | For the picture: day and night on the Earth, the Moon's phase, and where the Sun and Moon are in the receiver's sky. No result changes (nothing in the DOP, coverage or Monte Carlo code uses them). |
 | 2026-10-31 | **A19, A20 added** (Stage 5): real 1999 GPS orbits from almanacs, and the FAA's coverage method | To reproduce a published result (FAA Report #26, Table 2-1) with the satellites actually in orbit, and to compare it with our idealized Walker 24/6/1. See 'Comparison with published data' below. |
 | 2026-10-31 | **A6 changed, A18 added** (Stage 4): the mask is now set by a cone-shaped valley in the Terrain tab (off by default, so still 0 deg) | Studies how obstacles degrade positioning. For GPS alone (N >= 4 and PDOP <= 6): availability is 100% in the open, 99.6% with 10 deg walls, 87.9% at 20 deg, 34.4% at 30 deg and 1.8% at 40 deg; the median PDOP rises from 1.5 to 11.2. The analytic check A13 still applies, since a cone is an elevation mask. |
 | 2026-10-31 | **A2 changed**: t = 0 was an arbitrary moment with longitude 0 along +x; it is now 2026-01-01 00:00:00 UTC, and the Earth's angle is the Greenwich Mean Sidereal Time | Lets the page use a real calendar date (date picker) and prepares for comparisons with real data at real places and times. The Earth's angle at t = 0 is now 100.66 deg instead of 0. The GEO and IGSO presets were shifted by that angle, so they still sit over 80, 110.5, 140 deg E and cross at 118 deg E. Monte Carlo statistics are unchanged (A11). Over a year the model and Meeus's GMST drift apart by 0.00005 deg (the sidereal day is rounded), about 5 m on the equator. |
@@ -114,6 +124,10 @@ The tests (`python -m pytest`) include:
 - geometry checks: local East-North-Up frame, azimuth, and the analytic coverage-cap edge;
 - Earth rotation: one turn per sidereal day, a geostationary satellite stays over one spot and at the zenith of the point below it, and the GPS sky repeats after a sidereal day;
 - Stage 5: the almanac parser against the file text, almanac orbits (radius, latitude, period, ground-track repeat, the ascending node where IS-GPS-200 says), the GPS 1999 preset placing satellites exactly where the almanac does, the FAA grid, the stored reproduction against Table 2-1 in the weeks whose satellite set is not in doubt, the recompute path, and Langley's values;
+- Sun and Moon: Meeus's worked examples (25.a for the Sun, 47.a for the Moon, 22.a for the obliquity), the Sun's
+  declination at the 2026 solstices and equinoxes, the Moon's distance staying between perigee and apogee over a year,
+  the sidereal month, and two eclipses (the Sun and Moon line up on 2024-04-08 and are opposite on 2025-03-14);
+  the Moon brightness grid: the cell averaging, the lookup rule, and dark maria against bright highlands;
 - Monte Carlo: the vectorized batch agrees with the scalar calculation, area-uniform sampling, seed reproducibility, hand-computed summary statistics, and agreement with the analytic expected number of satellites in view within statistical error.
 
 ## Comparison with published data (Stage 5)
@@ -166,7 +180,15 @@ mask over one day (week 1007 almanac) we get a mean GDOP of 1.98 and a maximum o
 
 Papers, data sources and links are in `papers.txt`. The `paper/` folder (the PDFs) is not tracked by git.
 
-The only data file is the Natural Earth 110 m land outline (`data/ne_110m_land.geojson`, public
+The Moon's surface comes from the NASA Scientific Visualization Studio's CGI Moon Kit
+(https://svs.gsfc.nasa.gov/4720, `data/moon/lroc_color_poles_1k.jpg`, a 1024 x 512 mosaic from the Lunar
+Reconnaissance Orbiter's wide-angle camera). `tools/moonmap.py` averages it into a 2-degree grid of grey levels
+(`web/data/moon_albedo.json`); `web/moon.js` gives each triangle of a 5,120-triangle icosphere the grey of its centre.
+It prints check values: the maria come out at grey 68-90, the highlands at 166-204. To regenerate it you need
+Pillow (`pip install pillow`, only for this tool): `python tools/moonmap.py`. Like the Earth's colours, it is only
+for the look.
+
+The other data file is the Natural Earth 110 m land outline (`data/ne_110m_land.geojson`, public
 domain). It is used **only for the look of the Earth**: `tools/landmask.py` turns it into a
 1-degree land/ocean grid (28.9% of the surface area comes out as land, against about 29% in
 reality), and `web/earth.js` builds a flat-shaded icosphere of 5,120 triangles (edges about

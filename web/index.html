@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="icon" href="data:,">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
 <title>GPS DOP Simulator</title>
 <style>
   :root {
@@ -11,6 +11,7 @@
     --accent: #4fc3f7;
   }
   * { box-sizing: border-box; }
+  button, input, select, progress { border-radius: 0; }     /* square corners everywhere (circles set 50% below) */
   body { margin: 0; background: var(--bg); color: var(--text);
          font: 14px/1.4 system-ui, sans-serif; }
   main { display: grid; grid-template-columns: 1fr 340px; height: 100vh; }
@@ -25,13 +26,13 @@
   .row { display: flex; gap: 8px; align-items: center; margin: 6px 0; }
   .row label { width: 64px; color: var(--muted); }
   input[type=number], select { background: var(--bg); color: var(--text); border: 1px solid var(--line);
-         border-radius: 4px; padding: 4px 6px; width: 100%; }
+         padding: 4px 6px; width: 100%; }
   input[type=range] { width: 100%; }
-  button { background: var(--accent); color: #06222e; border: 0; border-radius: 4px;
+  button { background: var(--accent); color: #06222e; border: 0;
            padding: 5px 14px; font-weight: 600; cursor: pointer; }
   #status { color: var(--muted); font-size: 12px; margin-top: 4px; }
   #readout { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
-  .stat { background: var(--bg); border: 1px solid var(--line); border-radius: 6px;
+  .stat { background: var(--bg); border: 1px solid var(--line);
           padding: 6px 8px; }
   .stat b { display: block; font-size: 18px; font-variant-numeric: tabular-nums; }
   .stat span { color: var(--muted); font-size: 11px; }
@@ -42,7 +43,7 @@
   td:first-child, th:first-child { text-align: left; }
   .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 6px; }
   #sat-tip { position: absolute; z-index: 5; pointer-events: none; background: rgba(23, 29, 37, .96);
-             border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; font-size: 12px;
+             border: 1px solid var(--line); padding: 8px 10px; font-size: 12px;
              max-width: 280px; box-shadow: 0 2px 10px rgba(0, 0, 0, .4); }
   #sat-tip .name { font-size: 14px; font-weight: 600; margin-bottom: 4px; }
   #sat-tip table td { border: 0; padding: 1px 0; text-align: left; vertical-align: top; }
@@ -72,13 +73,13 @@
   #tab-cs .sat-row label { flex: 1; display: flex; gap: 6px; align-items: center; }
   #tab-cs .sat-row .name { min-width: 64px; }
   .dialog { position: absolute; top: 12px; left: 12px; width: 390px; max-height: calc(100% - 24px); overflow-y: auto; z-index: 6;
-            background: rgba(23, 29, 37, .97); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px;
+            background: rgba(23, 29, 37, .97); border: 1px solid var(--line); padding: 10px 12px;
             box-shadow: 0 4px 20px rgba(0, 0, 0, .5); }
   .dlg-head { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
   .dlg-head b { flex: 1; font-size: 15px; }
   .cards { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 6px; }
   .card { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; background: var(--bg); color: var(--text);
-          border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; text-align: left; font-weight: 400; }
+          border: 1px solid var(--line); padding: 6px 8px; text-align: left; font-weight: 400; }
   .card:hover { border-color: var(--accent); }
   .card canvas { width: 120px; height: 70px; align-self: center; }
   .card .t { font-weight: 600; }
@@ -86,8 +87,8 @@
   .card .state { color: var(--accent); font-size: 11px; font-weight: 600; }
   .card.present .state { color: #9ccc65; }
   .dialog .row label:not(.chk) { width: 118px; }
-  input.pick.big { width: 26px; height: 26px; border-radius: 6px; }
-  input.pick.big::-webkit-color-swatch, input.pick.big::-moz-color-swatch { border-radius: 4px; }
+  input.pick.big { width: 26px; height: 26px; border-radius: 0; }
+  input.pick.big::-webkit-color-swatch, input.pick.big::-moz-color-swatch { border-radius: 0; }
   #cmp-chart { width: 100%; height: 170px; display: block; margin-top: 6px; }
   table.cmp td, table.cmp th { font-size: 11.5px; }
   table.cmp tr[data-week] { cursor: pointer; }
@@ -95,7 +96,7 @@
   td.ok { color: #9ccc65; } td.off { color: #ffb74d; }
   #cmp-details { line-height: 1.5; }
   .tabs { display: flex; flex-wrap: wrap; gap: 4px; margin: 10px 0 0; border-bottom: 1px solid var(--line); }
-  .tab { background: none; color: var(--muted); border-radius: 4px 4px 0 0; padding: 6px 6px; white-space: nowrap; font-size: 13px;
+  .tab { background: none; color: var(--muted); padding: 6px 6px; white-space: nowrap; font-size: 13px;
          font-weight: 500; border-bottom: 2px solid transparent; }
   .tab.active { color: var(--text); border-bottom-color: var(--accent); }
   [hidden] { display: none !important; }
@@ -106,13 +107,21 @@
   #mc-n { width: 110px; flex: none; }
   progress { flex: 1; height: 10px; accent-color: var(--accent); }
   .legend { margin: 6px 0; font-size: 11px; color: var(--muted); }
-  .legend .bar { height: 10px; border-radius: 3px; margin: 3px 0; }
+  .legend .bar { height: 10px; margin: 3px 0; }
   .legend .scale { display: flex; justify-content: space-between; }
   .legend .keys { display: flex; gap: 14px; margin-top: 4px; }
   .legend .keys .dot { margin-right: 4px; }
   .kv td:last-child { font-variant-numeric: tabular-nums; }
   canvas.hist { width: 100%; height: 150px; display: block; }
   .caption { color: var(--muted); font-size: 12px; min-height: 18px; margin-bottom: 4px; }
+  #loader { position: fixed; inset: 0; z-index: 100; display: flex; flex-direction: column; align-items: center;
+            justify-content: center; gap: 12px; background: var(--bg); transition: opacity .5s; }
+  #loader.done { opacity: 0; pointer-events: none; }
+  #loader .title { font-size: 17px; font-weight: 600; }
+  #loader .track { width: 260px; height: 6px; background: var(--panel); border: 1px solid var(--line); }
+  #loader-fill { width: 0; height: 100%; background: var(--accent); transition: width .3s; }
+  #loader-step { color: var(--muted); font-size: 12px; min-height: 18px; max-width: 420px; text-align: center; }
+  #loader-step.err { color: #ff8a80; }
   @media (max-width: 800px) {
     main { grid-template-columns: 1fr; height: auto; }
     #globe { height: 60vh; }
@@ -125,9 +134,15 @@
   "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
 } }
 </script>
-<script src="https://cdn.jsdelivr.net/pyodide/v0.26.4/full/pyodide.js"></script>
+<script defer src="https://cdn.jsdelivr.net/pyodide/v0.26.4/full/pyodide.js"></script>
 </head>
 <body>
+<div id="loader" role="status" aria-live="polite">
+  <img src="favicon.svg" alt="" width="64" height="64">
+  <div class="title">GPS DOP Simulator</div>
+  <div class="track"><div id="loader-fill"></div></div>
+  <div id="loader-step">Starting…</div>
+</div>
 <main>
   <div id="globe"><div id="sat-tip" hidden></div>
   <div id="add-dialog" class="dialog" hidden role="dialog" aria-label="Add satellites">
@@ -183,6 +198,7 @@
       <button class="tab" id="tab-btn-cs" role="tab" aria-selected="false">Constellation</button>
       <button class="tab" id="tab-btn-tr" role="tab" aria-selected="false">Terrain</button>
       <button class="tab" id="tab-btn-cmp" role="tab" aria-selected="false">Compare</button>
+      <button class="tab" id="tab-btn-set" role="tab" aria-selected="false">Settings</button>
     </div>
 
     <section id="tab-live">
@@ -324,7 +340,7 @@
       <canvas id="cmp-chart"></canvas>
       <div class="caption" id="cmp-chart-cap"></div>
       <div class="legend"><div class="keys">
-        <span><span class="dot" style="background:none;border:1.5px solid #e8e8e8;border-radius:2px;transform:rotate(45deg)"></span>FAA (published)</span>
+        <span><span class="dot" style="background:none;border:1.5px solid #e8e8e8;border-radius:0;transform:rotate(45deg)"></span>FAA (published)</span>
         <span><span class="dot" style="background:#3987e5"></span>Ours, real almanac</span>
         <span><span class="dot" style="background:#9ccc65"></span>Ours, ideal 24</span></div></div>
       <div class="msg" id="cmp-summary"></div>
@@ -343,6 +359,16 @@
 
       <h2>Langley (1999), worked values</h2>
       <table id="cmp-langley" class="cmp"></table>
+    </section>
+    <section id="tab-set" hidden>
+      <div class="sub">What the globe shows. These change only the picture, never a result.</div>
+      <h2>Sun and Moon</h2>
+      <div class="row"><label class="chk"><input id="set-sun" type="checkbox" checked> Show the Sun</label></div>
+      <div class="row"><label class="chk"><input id="set-moon" type="checkbox" checked> Show the Moon</label></div>
+      <div class="row"><label class="chk"><input id="set-sunlight" type="checkbox" checked> Light the scene from the Sun (day and night, the Moon's phase)</label></div>
+      <div class="msg">Both are placed for the date and time in the Live tab. The Moon is drawn at its true distance
+        (about 60 Earth radii) and size: turn the view toward it to find it. The Sun is shown in its true direction
+        at its true apparent size (0.53°), but much closer than it really is.</div>
     </section>
   </aside>
 </main>
