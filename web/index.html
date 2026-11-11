@@ -95,6 +95,18 @@
   table.cmp tr.sel td { background: #1f2a36; }
   td.ok { color: #9ccc65; } td.off { color: #ffb74d; }
   #cmp-details { line-height: 1.5; }
+  .why { display: inline-flex; align-items: center; justify-content: center; width: 14px; height: 14px; margin-right: 5px;
+         border-radius: 50%; border: 1px solid #ffb74d; color: #ffb74d; font-size: 10px; font-weight: 700;
+         line-height: 1; cursor: help; vertical-align: 0; }
+  .why:hover, .why:focus { background: #ffb74d; color: var(--bg); outline: none; }
+  #cmp-why-tip { position: fixed; z-index: 20; width: 320px; max-width: calc(100vw - 16px); background: rgba(23, 29, 37, .98);
+                 border: 1px solid var(--line); padding: 8px 10px; font-size: 12px; line-height: 1.45;
+                 box-shadow: 0 2px 12px rgba(0, 0, 0, .5); pointer-events: none; }
+  #cmp-why-tip .name { font-size: 13px; font-weight: 600; }
+  #cmp-why-tip p { margin: 5px 0; }
+  #cmp-why-tip ul { margin: 2px 0 0; padding-left: 16px; color: var(--muted); }
+  #cmp-why-tip li { margin: 2px 0; }
+  #cmp-why-tip b { color: var(--text); }
   .tabs { display: flex; flex-wrap: wrap; gap: 4px; margin: 10px 0 0; border-bottom: 1px solid var(--line); }
   .tab { background: none; color: var(--muted); padding: 6px 6px; white-space: nowrap; font-size: 13px;
          font-weight: 500; border-bottom: 2px solid transparent; }
@@ -345,6 +357,7 @@
         <span><span class="dot" style="background:#9ccc65"></span>Ours, ideal 24</span></div></div>
       <div class="msg" id="cmp-summary"></div>
       <table id="cmp-table" class="cmp"></table>
+      <div id="cmp-why-tip" role="tooltip" hidden></div>
       <div class="msg" id="cmp-details"></div>
       <div class="row"><button id="cmp-recompute">Recompute this week in the browser</button><progress id="cmp-progress" max="1" value="0"></progress></div>
       <div class="msg" id="cmp-recompute-msg"></div>

@@ -53,7 +53,7 @@ handles the controls.
 | Land/ocean grid made from the Natural Earth outlines | `tools/landmask.py` (reads `data/ne_110m_land.geojson`, writes `web/data/land_mask.json`) |
 | Real GPS orbits from 1999 almanacs (IS-GPS-200 algorithm) | `web/sim/almanac.py`, almanacs in `web/data/almanac/1999/` |
 | The FAA's coverage method; the reproduction of its Table 2-1 | `web/sim/faa.py`, `tools/reproduce_faa.py` -> `web/data/faa_reproduction.json` |
-| Compare tab (table, chart, PDOP map, Langley's values) and the published numbers | `web/compare.js`, `web/data/published.json` |
+| Compare tab (table, chart, PDOP map, Langley's values) and the published numbers; a "?" on each mismatched week explains the gap (size, likely cause, the assumptions involved) | `web/compare.js`, `web/data/published.json` |
 | Local web server (no caching) | `tools/serve.py`, started by `launch.sh` |
 | Tests | `tests/` |
 

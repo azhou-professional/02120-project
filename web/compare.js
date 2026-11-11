@@ -40,9 +40,11 @@ export async function initCompare({ api, globe, mc }) {
       const pub = w.published[metric], ours = w.real[metric];
       const diff = ours === null ? null : ours - pub;
       const ok = diff !== null && Math.abs(diff) <= m.match;
+      // a "?" badge on every mismatched row; its tooltip text comes from whyText()
+      const why = ok ? "" : `<span class="why" tabindex="0" role="button" data-week="${w.week}" aria-label="Why week ${w.week} differs">?</span>`;
       return `<tr data-week="${w.week}" class="${w.week === selected ? "sel" : ""}"><td>${w.week}${w.explanation ? " *" : ""}</td>` +
              `<td>${fmt(pub, m.digits)}</td><td>${fmt(ours, m.digits)}</td>` +
-             `<td class="${ok ? "ok" : "off"}">${diff === null ? "–" : (diff >= 0 ? "+" : "") + diff.toFixed(m.digits)}</td>` +
+             `<td class="${ok ? "ok" : "off"}">${why}${diff === null ? "–" : (diff >= 0 ? "+" : "") + diff.toFixed(m.digits)}</td>` +
              `<td>${fmt(repro.ideal[metric], m.digits)}</td></tr>`;
     }).join("");
     $("cmp-table").innerHTML = `<thead><tr><th>Week</th><th>FAA</th><th>Ours (real)</th><th>Δ</th><th>Ideal 24</th></tr></thead><tbody>${rows}</tbody>`;
@@ -50,6 +52,83 @@ export async function initCompare({ api, globe, mc }) {
     $("cmp-summary").textContent = `${m.label}: ${matched} of ${weeks.length} weeks within ${m.match}${m.unit} of the published value (healthy satellites as flagged in each almanac).`;
     renderDetails();
   }
+
+  // ---- "?" tooltip: why a week does not match ----------------------------------------------------------------
+  // Built only from data already on the page (the stored reproduction and its "explanation" entries), so every
+  // number in it can be checked against the table, the details line, and the README's comparison table.
+  const GRID_POINTS = 2376, MINUTES = 1440;
+  const ASSUMPTIONS = [
+    "<b>A1</b> Earth is a sphere (radius 6378.137 km); the FAA presumably used the WGS-84 ellipsoid, so grid points and elevations differ slightly.",
+    "<b>A19</b> Satellites are the ones flagged healthy in our (CelesTrak) copy of the week's almanac; the report does not list the satellites it used, and health flags change within a week.",
+    "<b>A20</b> We use the 24 h from the almanac's reference time; the report does not say which day it used. \"Global 99.9% PDOP\" = mean over grid points of each point's 99.9% PDOP (inferred, not defined in the report).",
+    "<b>A3, A7</b> Two-body almanac orbits and geometry only: no outages or manoeuvres during the day, no signal or error model.",
+  ];
+
+  function whyText(w, metricKey) {
+    const m = METRICS[metricKey], pub = w.published[metricKey], ours = w.real[metricKey];
+    const diff = ours - pub;
+    const sign = (v) => { const s = v.toFixed(m.digits); return /^-?0\.0*$/.test(s) ? "0" : (v > 0 ? "+" : "") + s; };   // no "-0.000"
+    const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
+    let html = `<div class="name">Week ${w.week}: why it differs</div>` +
+      `<p>${m.label}: FAA ${fmt(pub, m.digits)}${m.unit}, ours ${fmt(ours, m.digits)}${m.unit} (Δ ${sign(diff)}).`;
+    // availability gaps converted to whole minutes, so a tiny percentage can be read as a count
+    if (metricKey === "worst_point_pct") {
+      html += ` That is ${plural(Math.round((Math.abs(diff) / 100) * MINUTES), "minute")} of ${MINUTES.toLocaleString()} at the worst grid point.`;
+    } else if (metricKey === "global_average_pct") {
+      html += ` That is about ${Math.round((Math.abs(diff) / 100) * GRID_POINTS * MINUTES).toLocaleString()} of ` +
+              `${(GRID_POINTS * MINUTES).toLocaleString()} point-minutes.`;
+    }
+    html += "</p><p><b>Likely cause.</b> ";
+    const bad = w.real.unhealthy_prns;
+    if (w.explanation) {
+      // Three outcomes for the alternative satellite set stored by tools/reproduce_faa.py:
+      //   within the tolerance -> it matches; closes at least 75% of the gap -> it mostly explains it; else not explained.
+      const e = w.explanation, alt = e.result[metricKey], rest = Math.abs(alt - pub);
+      const flagged = `Our almanac copy flags ${bad.length ? "PRN " + bad.join(", ") : "no satellite"} as unhealthy. `;
+      if (rest <= m.match) {
+        html += flagged + `With another satellite set (${e.label}) we get ${fmt(alt, m.digits)}${m.unit} (Δ ${sign(alt - pub)}), which matches. ` +
+                "So the FAA most likely used a different satellite set from our almanac copy (an inference: the report does not list its satellites).";
+      } else if (rest <= 0.25 * Math.abs(diff)) {
+        html += flagged + `With another satellite set (${e.label}) we get ${fmt(alt, m.digits)}${m.unit} (Δ ${sign(alt - pub)}), ` +
+                "which closes most of the gap. So the satellite set is the main cause (an inference); the small rest is the kind of " +
+                "difference seen in the weeks that match (A1, A20).";
+      } else {
+        const tried = e.exclude.length ? `without PRN ${e.exclude.join(", ")}` : "all satellites";
+        html += flagged + `Leaving out single satellites does not reproduce it (best tried: ${tried}, giving ${fmt(alt, m.digits)}${m.unit}, ` +
+                `Δ ${sign(alt - pub)}). Not explained: possibly a satellite outage during the FAA's day, or a different day.`;
+      }
+    } else if (metricKey === "worst_point_pct") {
+      html += "A difference of a minute or so at one grid point: the worst point is sensitive to the exact sample " +
+              "times and to the Earth's shape (A1, A20). The other statistics for this week match.";
+    } else {
+      html += "Not identified; see the assumptions below.";
+    }
+    html += `</p><p><b>Modelling assumptions that can cause differences</b> (README):</p><ul>` +
+            ASSUMPTIONS.map((a) => `<li>${a}</li>`).join("") + "</ul>";
+    return html;
+  }
+
+  const tip = $("cmp-why-tip");
+  let tipFor = null;                 // the badge the tooltip is showing for
+  function showTip(badge) {
+    tip.innerHTML = whyText(weeks.find((x) => x.week === +badge.dataset.week), metric);
+    tip.hidden = false;
+    tipFor = badge;
+    // place it to the left of the badge (the table is in the right-hand panel), kept inside the window
+    const b = badge.getBoundingClientRect(), t = tip.getBoundingClientRect(), gap = 8;
+    let left = b.left - t.width - gap;
+    if (left < gap) left = Math.min(b.right + gap, window.innerWidth - t.width - gap);
+    const top = Math.max(gap, Math.min(b.top - 10, window.innerHeight - t.height - gap));
+    tip.style.left = `${Math.max(gap, left)}px`;
+    tip.style.top = `${top}px`;
+  }
+  function hideTip() { tip.hidden = true; tipFor = null; }
+  const table = $("cmp-table");
+  table.addEventListener("mouseover", (e) => { const b = e.target.closest(".why"); if (b && b !== tipFor) showTip(b); });
+  table.addEventListener("mouseout", (e) => { if (e.target.closest(".why") && !e.relatedTarget?.closest?.(".why")) hideTip(); });
+  table.addEventListener("focusin", (e) => { const b = e.target.closest(".why"); if (b) showTip(b); });
+  table.addEventListener("focusout", (e) => { if (e.target.closest(".why")) hideTip(); });
+  table.addEventListener("keydown", (e) => { if (e.key === "Escape") hideTip(); });
 
   function renderDetails() {
     const w = weeks.find((x) => x.week === selected);
@@ -140,8 +219,12 @@ export async function initCompare({ api, globe, mc }) {
   $("cmp-legend-nofix").style.background = NO_FIX;
 
   // ---- controls ------------------------------------------------------------------------------------------------
-  $("cmp-metric").addEventListener("change", () => { metric = $("cmp-metric").value; renderTable(); renderChart(); });
+  $("cmp-metric").addEventListener("change", () => { metric = $("cmp-metric").value; hideTip(); renderTable(); renderChart(); });
+  document.addEventListener("click", (e) => { if (!e.target.closest(".why")) hideTip(); });   // tap elsewhere closes it
   $("cmp-table").addEventListener("click", (e) => {
+    const badge = e.target.closest(".why");
+    if (badge) { if (badge === tipFor && tip.hidden === false && e.pointerType !== "mouse") hideTip(); else showTip(badge); return; }  // tap toggles; does not select the row
+    hideTip();
     const tr = e.target.closest("tr[data-week]");
     if (!tr) return;
     selected = +tr.dataset.week;
