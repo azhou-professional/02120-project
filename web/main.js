@@ -8,6 +8,7 @@ import { initConstellation } from "./constellation.js";
 import { initCompare } from "./compare.js";
 import { loadLandMask } from "./earth.js";
 import { loadMoonAlbedo } from "./moon.js";
+import { initLearning } from "./learning.js";
 
 const $ = (id) => document.getElementById(id);
 const DAY = 86400;
@@ -107,6 +108,7 @@ function setupTabs(onShow) {
 }
 
 async function main() {
+  initLearning();          // the Learning tab opens its own wide panel; it needs no Python
   const api = await loadPython();
   loadingStep("Loading the Earth and Moon maps");
   const land = await loadLandMask("data/land_mask.json").catch((e) => { console.warn("no land grid:", e); return null; });

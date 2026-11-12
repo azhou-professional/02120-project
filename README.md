@@ -55,6 +55,7 @@ handles the controls.
 | The FAA's coverage method; the reproduction of its Table 2-1 | `web/sim/faa.py`, `tools/reproduce_faa.py` -> `web/data/faa_reproduction.json` |
 | Compare tab (table, chart, PDOP map, Langley's values) and the published numbers; a "?" on each mismatched week explains the gap (size, likely cause, the assumptions involved) | `web/compare.js`, `web/data/published.json` |
 | Local web server (no caching) | `tools/serve.py`, started by `launch.sh` |
+| Learning tab: a wide panel over the globe with the equations (orbits, Kepler's equation, look angles, DOP, the coverage formula), four worked examples (tetrahedron DOP, GPS period and coverage, Langley's clock example, Newton's method on Kepler's equation) and the limitations L1-L14 with their reasons. Equations typeset with KaTeX 0.16.11 (jsDelivr) | text in `web/index.html` (`<div id="learn">`), behaviour in `web/learning.js`, numbers checked by `tests/test_learning.py` |
 | Tests | `tests/` |
 
 `main.py` at the top level is an early first draft (it uses Earth radius 6371 km and a nonrotating
@@ -70,7 +71,8 @@ light from the upper right lights everything evenly, as before. The Earth casts 
 ## Assumptions
 
 These are the modelling assumptions the results depend on. **This section is kept up to date:
-whenever an assumption changes, the table is edited and the change is added to the log below.**
+whenever an assumption changes, the table is edited and the change is added to the log below.** The Learning tab's
+"Limitations" section explains why each assumption was made and how much it matters; update it too when one changes.
 
 | # | Assumption | Value / detail | Where |
 |---|---|---|---|
@@ -128,6 +130,8 @@ The tests (`python -m pytest`) include:
   declination at the 2026 solstices and equinoxes, the Moon's distance staying between perigee and apogee over a year,
   the sidereal month, and two eclipses (the Sun and Moon line up on 2024-04-08 and are opposite on 2025-03-14);
   the Moon brightness grid: the cell averaging, the lookup rule, and dark maria against bright highlands;
+- the Learning tab: every number marked `data-check` in its worked examples is recomputed from the code and must be
+  the code's value correctly rounded to the decimals shown (and no marked number may lack a check);
 - Monte Carlo: the vectorized batch agrees with the scalar calculation, area-uniform sampling, seed reproducibility, hand-computed summary statistics, and agreement with the analytic expected number of satellites in view within statistical error.
 
 ## Comparison with published data (Stage 5)

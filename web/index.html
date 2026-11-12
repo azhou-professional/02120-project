@@ -139,7 +139,44 @@
     #globe { height: 60vh; }
     aside { border-left: 0; border-top: 1px solid var(--line); }
   }
+  /* ---- Learning panel: covers the globe, leaves the sidebar usable ---- */
+  #learn { position: fixed; top: 0; bottom: 0; left: 0; right: 340px; z-index: 30; overflow-y: auto;
+           background: var(--bg); border-right: 1px solid var(--line); outline: none; }
+  #learn .head { position: sticky; top: 0; z-index: 1; display: flex; align-items: center; gap: 12px;
+                 background: var(--panel); border-bottom: 1px solid var(--line); padding: 8px 28px; }
+  #learn .head b { font-size: 15px; }
+  #learn .head .x { margin-left: auto; font-size: 22px; }
+  #learn .wrap { max-width: 860px; margin: 0 auto; padding: 8px 28px 80px; line-height: 1.6; }
+  #learn nav { font-size: 13px; color: var(--muted); margin: 10px 0 4px; }
+  #learn nav a { color: var(--accent); text-decoration: none; margin-right: 14px; white-space: nowrap; }
+  #learn h2 { font-size: 20px; text-transform: none; letter-spacing: 0; color: var(--text); margin: 36px 0 8px;
+              padding-bottom: 4px; border-bottom: 1px solid var(--line); }
+  #learn h3 { font-size: 15px; color: var(--accent); margin: 24px 0 6px; }
+  #learn h4 { font-size: 14px; margin: 0 0 4px; }
+  #learn p, #learn li { color: var(--text); }
+  #learn code { background: var(--panel); border: 1px solid var(--line); padding: 0 4px; font-size: 12.5px; }
+  #learn .where { color: var(--muted); font-size: 12.5px; }
+  #learn .note { border-left: 3px solid var(--accent); background: var(--panel); padding: 8px 12px; margin: 12px 0; }
+  #learn .katex-display { overflow-x: auto; overflow-y: hidden; padding: 4px 0; }
+  #learn .result { background: var(--panel); border: 1px solid var(--line); padding: 8px 12px; margin: 10px 0; }
+  #learn .result b[data-check] { color: #9ccc65; font-variant-numeric: tabular-nums; }
+  #learn table { width: auto; margin: 8px 0; }
+  #learn td, #learn th { text-align: right; padding: 3px 10px; font-size: 13px; }
+  #learn td:first-child, #learn th:first-child { text-align: left; }
+  #learn .lim { border: 1px solid var(--line); background: var(--panel); padding: 10px 14px; margin: 10px 0; }
+  #learn .lim dl { display: grid; grid-template-columns: 92px 1fr; gap: 3px 10px; margin: 0; font-size: 13px; }
+  #learn .lim dt { color: var(--muted); }
+  #learn .lim dd { margin: 0; }
+  @media (max-width: 800px) {
+    #learn { right: 0; border-right: 0; }
+    #learn .wrap, #learn .head { padding-left: 16px; padding-right: 16px; }
+    #learn .lim dl { grid-template-columns: 1fr; }
+  }
 </style>
+<!-- KaTeX typesets the equations in the Learning panel (pinned version, same CDN as Three.js and Pyodide) -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"></script>
 <script type="importmap">
 { "imports": {
   "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
@@ -211,6 +248,7 @@
       <button class="tab" id="tab-btn-tr" role="tab" aria-selected="false">Terrain</button>
       <button class="tab" id="tab-btn-cmp" role="tab" aria-selected="false">Compare</button>
       <button class="tab" id="tab-btn-set" role="tab" aria-selected="false">Settings</button>
+      <button class="tab" id="tab-btn-learn" role="tab" aria-selected="false" aria-controls="learn">Learning</button>
     </div>
 
     <section id="tab-live">
@@ -385,6 +423,401 @@
     </section>
   </aside>
 </main>
+
+<!-- ================================================================================================
+     Learning panel. Opened by the "Learning" tab (learning.js). Maths is LaTeX between \( \) (inline)
+     and \[ \] (display), typeset by KaTeX. Every number marked data-check="..." is recomputed from the
+     Python code by tests/test_learning.py, so the page cannot silently disagree with the code.
+     ================================================================================================ -->
+<div id="learn" hidden tabindex="-1" role="dialog" aria-label="Learning">
+  <div class="head"><b>Learning: the physics and maths behind the simulator</b>
+    <button class="x" id="learn-close" aria-label="Close">×</button></div>
+  <div class="wrap">
+    <nav>
+      <a href="#ln-idea">1. The idea</a><a href="#ln-orbits">2. Orbits</a><a href="#ln-sky">3. Earth and sky</a>
+      <a href="#ln-dop">4. DOP</a><a href="#ln-cov">5. Coverage check</a><a href="#ln-ex">6. Worked examples</a>
+      <a href="#ln-lim">7. Limitations</a>
+    </nav>
+    <p class="where">Each equation names the Python function that computes it (in <code>web/sim/</code>), so you can
+      open the file and compare. The green numbers in the worked examples are recomputed from that code by
+      <code>tests/test_learning.py</code>.</p>
+
+    <!-- ---------------------------------------------------------------------------------------- -->
+    <h2 id="ln-idea">1. The idea in one paragraph</h2>
+    <p>A GPS receiver does not measure its position directly. It measures the travel time of a signal from each
+      satellite, which gives a distance, the <em>pseudorange</em>. The receiver's own clock is cheap and wrong by an
+      unknown amount \(\delta t\), and light covers 300 km in a millisecond, so the clock error \(b = c\,\delta t\)
+      (written as a distance) is a fourth unknown next to \(x, y, z\):</p>
+    \[ \rho_i = \lVert \mathbf{s}_i - \mathbf{r} \rVert + b + \varepsilon_i , \qquad i = 1, \dots, N \]
+    <p>where \(\mathbf{s}_i\) is satellite \(i\)'s position, \(\mathbf{r}\) the receiver's position and
+      \(\varepsilon_i\) the measurement error. Four unknowns need at least <b>four satellites</b>. How much the
+      errors \(\varepsilon_i\) are magnified into a position error depends only on the <em>directions</em> to the
+      satellites. That magnification is the <b>dilution of precision (DOP)</b>. The simulator finds where the
+      satellites are (section 2), which ones the receiver can see (section 3), computes the DOP (section 4), and
+      repeats this at random places and times (Monte Carlo) to measure coverage, which is checked against an exact
+      formula (section 5).</p>
+
+    <!-- ---------------------------------------------------------------------------------------- -->
+    <h2 id="ln-orbits">2. Orbits: where the satellites are</h2>
+    <p>Each satellite follows a two-body Kepler orbit around a point-mass Earth, with
+      \(\mu = GM_\oplus = 398\,600.4418\ \text{km}^3/\text{s}^2\). An orbit is described by six <em>elements</em>:</p>
+    <table>
+      <tr><th>Element</th><th>Symbol</th><th>Meaning</th></tr>
+      <tr><td>semi-major axis</td><td>\(a\)</td><td style="text-align:left">size of the ellipse (the radius for a circle)</td></tr>
+      <tr><td>eccentricity</td><td>\(e\)</td><td style="text-align:left">shape: 0 = circle, close to 1 = long and thin</td></tr>
+      <tr><td>inclination</td><td>\(i\)</td><td style="text-align:left">tilt of the orbit plane from the equator</td></tr>
+      <tr><td>RAAN</td><td>\(\Omega\)</td><td style="text-align:left">where the orbit crosses the equator going north, measured from \(+x\)</td></tr>
+      <tr><td>argument of perigee</td><td>\(\omega\)</td><td style="text-align:left">where the closest point lies within the plane</td></tr>
+      <tr><td>mean anomaly at \(t=0\)</td><td>\(M_0\)</td><td style="text-align:left">where the satellite is along the orbit at the start</td></tr>
+    </table>
+
+    <h3>Period and mean motion (Kepler's third law)</h3>
+    \[ n = \sqrt{\frac{\mu}{a^3}}, \qquad T = \frac{2\pi}{n} = 2\pi\sqrt{\frac{a^3}{\mu}} , \qquad M(t) = M_0 + n\,t \]
+    <p class="where"><code>constellation.mean_motion</code>, <code>constellation.period</code>.
+      The <em>mean anomaly</em> \(M\) grows at a steady rate. It is the angle the satellite would have if it moved
+      at constant speed.</p>
+
+    <h3>Kepler's equation</h3>
+    <p>On an ellipse the satellite speeds up near perigee, so its real angle is not \(M\). The <em>eccentric
+      anomaly</em> \(E\) links the two:</p>
+    \[ M = E - e \sin E \]
+    <p>There is no closed-form solution for \(E\), so it is solved with <b>Newton's method</b>. With
+      \(f(E) = E - e\sin E - M\) and \(f'(E) = 1 - e\cos E\):</p>
+    \[ E_{k+1} = E_k - \frac{E_k - e\sin E_k - M}{1 - e\cos E_k}, \qquad E_0 = M + 0.85\,e\,\operatorname{sign}(\sin M) \]
+    <p class="where"><code>constellation.solve_kepler</code> (stops when the step is below \(10^{-13}\) rad).
+      Since \(f'(E) \ge 1 - e &gt; 0\), the step never divides by zero for \(e &lt; 1\). Worked example D below.</p>
+
+    <h3>Position in the orbit plane, then in space</h3>
+    <p>In the orbit plane (Earth's centre at one focus, \(x\) towards perigee):</p>
+    \[ x_{\text{pf}} = a(\cos E - e), \qquad y_{\text{pf}} = a\sqrt{1-e^2}\,\sin E, \qquad r = a(1 - e\cos E) \]
+    <p>Three rotations carry the point into the inertial frame (\(+z\) through the north pole, \(+x\) towards the
+      vernal equinox): first by \(\omega\) about the orbit normal, then by \(i\) about the line of nodes, then by
+      \(\Omega\) about the pole:</p>
+    \[ \mathbf{s} = R_z(\Omega)\, R_x(i)\, R_z(\omega) \begin{pmatrix} x_{\text{pf}} \\ y_{\text{pf}} \\ 0 \end{pmatrix} \]
+    <p class="where"><code>constellation.positions</code>, <code>constellation._to_inertial</code>. For a circle
+      (\(e = 0\)) this reduces to \(a(\cos M, \sin M)\) in the plane, which a test checks. Speed comes from the
+      vis-viva equation \(v^2 = \mu\,(2/r - 1/a)\) (<code>constellation.speed</code>).</p>
+
+    <h3>Walker constellations</h3>
+    <p>A Walker pattern \(T/P/F\) places \(T\) satellites in \(P\) equally spaced circular planes. Plane \(p\)
+      (\(p = 0 \dots P-1\)) and slot \(s\) (\(s = 0 \dots T/P - 1\)) get</p>
+    \[ \Omega_p = \frac{360^\circ\, p}{P}, \qquad M_{0} = \frac{360^\circ\, s}{T/P} + \frac{360^\circ\, F\, p}{T} \]
+    <p class="where"><code>constellation.walker</code>. The idealized GPS is Walker 24/6/1 at
+      \(a = 26\,559.7\) km, \(i = 55^\circ\).</p>
+
+    <!-- ---------------------------------------------------------------------------------------- -->
+    <h2 id="ln-sky">3. Earth and sky: what the receiver sees</h2>
+    <h3>The rotating Earth</h3>
+    <p>The satellites move in the inertial frame while the Earth turns underneath them once per sidereal day
+      (86 164.0905 s, which is 4 minutes shorter than a solar day because the Earth also moves around the Sun).
+      The angle from \(+x\) to Greenwich is the Greenwich Mean Sidereal Time (Meeus, eq. 12.4):</p>
+    \[ \theta(t) = \theta_0 + \omega_\oplus t, \qquad \omega_\oplus = \frac{2\pi}{86\,164.0905\ \text{s}}, \qquad
+       \theta_0 = \text{GMST}(\text{2026-01-01 00:00 UTC}) \approx 100.66^\circ \]
+    <p class="where"><code>geometry.gmst_deg</code>, <code>geometry.earth_angle_deg</code>.</p>
+
+    <h3>Receiver position and its local East-North-Up frame</h3>
+    <p>For latitude \(\varphi\) and longitude \(\lambda\), the inertial longitude is \(\lambda' = \lambda + \theta(t)\), and on
+      a sphere of radius \(R = 6378.137\) km:</p>
+    \[ \mathbf{r} = R \begin{pmatrix} \cos\varphi\cos\lambda' \\ \cos\varphi\sin\lambda' \\ \sin\varphi \end{pmatrix}, \quad
+       \hat{\mathbf{E}} = \begin{pmatrix} -\sin\lambda' \\ \cos\lambda' \\ 0 \end{pmatrix}, \quad
+       \hat{\mathbf{N}} = \begin{pmatrix} -\sin\varphi\cos\lambda' \\ -\sin\varphi\sin\lambda' \\ \cos\varphi \end{pmatrix}, \quad
+       \hat{\mathbf{U}} = \frac{\mathbf{r}}{R} \]
+    <p class="where"><code>geometry.receiver_position</code>, <code>geometry.enu_basis</code>.</p>
+
+    <h3>Elevation and azimuth</h3>
+    <p>The unit vector from the receiver to satellite \(i\) is \(\hat{\mathbf{e}}_i = (\mathbf{s}_i - \mathbf{r}) / \lVert \mathbf{s}_i - \mathbf{r}\rVert\). Then</p>
+    \[ \text{el}_i = \arcsin\big(\hat{\mathbf{e}}_i\cdot\hat{\mathbf{U}}\big), \qquad
+       \text{az}_i = \operatorname{atan2}\big(\hat{\mathbf{e}}_i\cdot\hat{\mathbf{E}},\ \hat{\mathbf{e}}_i\cdot\hat{\mathbf{N}}\big) \]
+    <p class="where"><code>geometry.look_angles</code>. A satellite counts as <b>visible</b> if it is switched on and
+      \(\text{el}_i \ge\) the blocking angle (0° in the open, or the valley's wall angle in the Terrain tab,
+      <code>geometry.blocking_angle</code>).</p>
+
+    <!-- ---------------------------------------------------------------------------------------- -->
+    <h2 id="ln-dop">4. Dilution of precision (DOP)</h2>
+    <h3>Linearizing the pseudorange equations</h3>
+    <p>Start from a guess \(\mathbf{r}_0, b_0\) and ask how the pseudoranges change for a small change
+      \(\delta\mathbf{r}, \delta b\). The derivative of a distance \(\lVert\mathbf{s}_i - \mathbf{r}\rVert\) with
+      respect to \(\mathbf{r}\) is \(-\hat{\mathbf{e}}_i\), so</p>
+    \[ \delta\rho_i = -\hat{\mathbf{e}}_i\cdot\delta\mathbf{r} + \delta b
+       \quad\Longrightarrow\quad
+       \delta\boldsymbol{\rho} = G\,\delta\mathbf{x}, \qquad
+       G = \begin{pmatrix} -e_{1x} & -e_{1y} & -e_{1z} & 1 \\ -e_{2x} & -e_{2y} & -e_{2z} & 1 \\ \vdots & \vdots & \vdots & \vdots \\ -e_{Nx} & -e_{Ny} & -e_{Nz} & 1 \end{pmatrix}, \qquad
+       \delta\mathbf{x} = \begin{pmatrix} \delta x \\ \delta y \\ \delta z \\ \delta b \end{pmatrix} \]
+    <p>\(G\) is the <b>geometry matrix</b>. It has one row per visible satellite and depends only on directions.</p>
+
+    <h3>Least squares, and where DOP comes from</h3>
+    <p>With \(N \ge 4\) satellites the least-squares solution is
+      \(\delta\hat{\mathbf{x}} = (G^{\mathsf T}G)^{-1}G^{\mathsf T}\delta\boldsymbol{\rho}\). If every pseudorange has an
+      independent error of the same size \(\sigma\), the covariance of the solution is</p>
+    \[ \operatorname{Cov}(\delta\hat{\mathbf{x}}) = \sigma^2\,(G^{\mathsf T}G)^{-1} = \sigma^2 Q,
+       \qquad Q = (G^{\mathsf T}G)^{-1} \ \ (4\times4) \]
+    <p>So \(Q\) says how much the geometry <em>multiplies</em> the range error. The DOPs are square roots of sums of
+      its diagonal elements:</p>
+    \[ \text{GDOP} = \sqrt{Q_{xx}+Q_{yy}+Q_{zz}+Q_{bb}}, \quad
+       \text{PDOP} = \sqrt{Q_{xx}+Q_{yy}+Q_{zz}}, \quad
+       \text{TDOP} = \sqrt{Q_{bb}} \]
+    <p>For horizontal and vertical, rotate the 3×3 position block into East-North-Up with
+      \(R_{\text{ENU}} = \big(\hat{\mathbf{E}}\ \hat{\mathbf{N}}\ \hat{\mathbf{U}}\big)^{\mathsf T}\):</p>
+    \[ Q_{\text{ENU}} = R_{\text{ENU}}\, Q_{3\times3}\, R_{\text{ENU}}^{\mathsf T}, \qquad
+       \text{HDOP} = \sqrt{Q_{EE} + Q_{NN}}, \qquad \text{VDOP} = \sqrt{Q_{UU}} \]
+    <p class="where"><code>dop.dop</code> (one receiver) and <code>dop.dop_batch</code> (many Monte Carlo trials at once).
+      Rotation does not change a trace, so \(\text{PDOP}^2 = \text{HDOP}^2 + \text{VDOP}^2\) and
+      \(\text{GDOP}^2 = \text{PDOP}^2 + \text{TDOP}^2\). Both identities are tested.</p>
+    <div class="note"><b>In words:</b> 1-sigma position error ≈ PDOP × range error. With 1 m range errors and
+      PDOP = 2, the 3-D position is uncertain by about 2 m. Small DOP means good geometry. "Good positioning" in
+      this app means at least 4 satellites and PDOP ≤ 6 (editable).</div>
+
+    <h3>Why four satellites, and when it fails anyway</h3>
+    <ul>
+      <li>\(G\) has \(N\) rows, so \(G^{\mathsf T}G\) has rank at most \(N\). With \(N &lt; 4\) it cannot be inverted,
+        so there are more unknowns than equations.</li>
+      <li>Even with many satellites, \(G^{\mathsf T}G\) is singular if all the directions lie on one cone around some axis
+        \(\hat{\mathbf{a}}\), i.e. \(\hat{\mathbf{e}}_i\cdot\hat{\mathbf{a}} = k\) for every \(i\). Then
+        \(G\,(\hat{\mathbf{a}}, k)^{\mathsf T} = \mathbf{0}\): moving along \(\hat{\mathbf{a}}\) and changing the clock by \(k\)
+        changes no pseudorange. Satellites all on the horizon (\(\hat{\mathbf{a}} = \hat{\mathbf{U}}, k = 0\)) are a
+        special case. The code returns NaN when the condition number of \(G^{\mathsf T}G\) exceeds \(10^{12}\).</li>
+      <li>Adding a satellite adds a positive term \(\mathbf{g}\mathbf{g}^{\mathsf T}\) to \(G^{\mathsf T}G\), so the DOP can
+        only go down or stay the same (tested).</li>
+    </ul>
+
+    <!-- ---------------------------------------------------------------------------------------- -->
+    <h2 id="ln-cov">5. The analytic coverage check</h2>
+    <p>One satellite at radius \(a\) is above elevation \(\varepsilon\) for every point within a central angle
+      \(\lambda\) of the point directly below it. In the triangle Earth centre–receiver–satellite, the angle at the
+      receiver is \(90^\circ + \varepsilon\). The law of sines gives the angle \(\eta\) at the satellite:
+      \(\sin\eta = R\cos\varepsilon / a\). The three angles add up to \(180^\circ\), so</p>
+    \[ \lambda = 90^\circ - \varepsilon - \eta = \arccos\!\left(\frac{R\cos\varepsilon}{a}\right) - \varepsilon \]
+    <p>That region is a spherical cap whose area is \(2\pi R^2(1-\cos\lambda)\). Dividing by the sphere's area
+      \(4\pi R^2\) gives the probability that a <b>uniformly random</b> point sees the satellite:</p>
+    \[ P = \frac{1 - \cos\lambda}{2}, \qquad \mathbb{E}[\text{number in view}] = \sum_{\text{satellites}} P_i \]
+    <p class="where"><code>montecarlo.cap_half_angle</code>, <code>montecarlo.single_sat_probability</code>,
+      <code>montecarlo.expected_mean_visible</code>. The sum works even though visibilities are correlated, because
+      the expectation of a sum is always the sum of the expectations. For an ellipse \(r\) changes, so \(P\) is
+      averaged over the orbit. The Monte Carlo picks \(\sin\varphi\) uniform in \([-1,1]\) and \(\lambda\) uniform in
+      \([0^\circ, 360^\circ)\), which is uniform by area. Its mean must match this value within its statistical error.
+      This is the check shown in the Monte Carlo tab.</p>
+
+    <!-- ---------------------------------------------------------------------------------------- -->
+    <h2 id="ln-ex">6. Worked examples</h2>
+
+    <h3>A. The ideal four-satellite geometry: a regular tetrahedron</h3>
+    <p>Put one satellite at the zenith and three at elevation \(\arcsin(-\tfrac13) = -19.47^\circ\), 120° apart in
+      azimuth. The four unit vectors point to the corners of a regular tetrahedron. In East-North-Up coordinates,
+      with \(s = \sqrt{8}/3 = 0.9428\):</p>
+    \[ \hat{\mathbf{e}}_1 = (0, 0, 1), \qquad \hat{\mathbf{e}}_{2,3,4} = \big(s\cos\alpha,\ s\sin\alpha,\ -\tfrac13\big),\ \ \alpha = 0^\circ, 120^\circ, 240^\circ \]
+    \[ G = \begin{pmatrix} 0 & 0 & -1 & 1 \\ -0.9428 & 0 & 0.3333 & 1 \\ 0.4714 & -0.8165 & 0.3333 & 1 \\ 0.4714 & 0.8165 & 0.3333 & 1 \end{pmatrix} \]
+    <p>Build \(G^{\mathsf T}G\) one block at a time:</p>
+    <ul>
+      <li>Position block \(\sum_i \hat{\mathbf{e}}_i\hat{\mathbf{e}}_i^{\mathsf T}\): by symmetry it is a multiple of the identity.
+        The \(zz\) entry is \(1 + 3\cdot\tfrac19 = \tfrac43\). The \(xx\) entry is \(s^2(1 + \tfrac14 + \tfrac14) = \tfrac89\cdot\tfrac32 = \tfrac43\).</li>
+      <li>Position–clock entries \(-\sum_i \hat{\mathbf{e}}_i = \mathbf{0}\), because the corners of a regular tetrahedron
+        add up to zero.</li>
+      <li>Clock–clock entry: \(\sum_i 1 = N = 4\).</li>
+    </ul>
+    \[ G^{\mathsf T}G = \begin{pmatrix} \tfrac43 & 0 & 0 & 0 \\ 0 & \tfrac43 & 0 & 0 \\ 0 & 0 & \tfrac43 & 0 \\ 0 & 0 & 0 & 4 \end{pmatrix}
+       \quad\Longrightarrow\quad
+       Q = \begin{pmatrix} \tfrac34 & 0 & 0 & 0 \\ 0 & \tfrac34 & 0 & 0 \\ 0 & 0 & \tfrac34 & 0 \\ 0 & 0 & 0 & \tfrac14 \end{pmatrix} \]
+    \[ \text{GDOP} = \sqrt{\tfrac94 + \tfrac14} = \tfrac{\sqrt{10}}{2}, \quad \text{PDOP} = \sqrt{\tfrac94} = \tfrac32, \quad
+       \text{HDOP} = \sqrt{\tfrac32}, \quad \text{VDOP} = \tfrac{\sqrt3}{2}, \quad \text{TDOP} = \tfrac12 \]
+    <div class="result">Result: GDOP <b data-check="tetra_gdop">1.5811</b>, PDOP <b data-check="tetra_pdop">1.5000</b>,
+      HDOP <b data-check="tetra_hdop">1.2247</b>, VDOP <b data-check="tetra_vdop">0.8660</b>,
+      TDOP <b data-check="tetra_tdop">0.5000</b>. Langley (1999) gives GDOP 1.581, the smallest possible with four
+      satellites. Three of the satellites are below the horizon, so a receiver on the ground can never actually
+      have this geometry, but the matrix algebra does not care.</div>
+
+    <h3>B. The GPS orbit period, and how many satellites are in view</h3>
+    <p><b>Period.</b> With \(a = 26\,559.7\) km and \(\mu = 398\,600.4418\ \text{km}^3/\text{s}^2\):</p>
+    \[ a^3 = 1.87357\times10^{13}\ \text{km}^3, \quad \frac{a^3}{\mu} = 4.70037\times10^{7}\ \text{s}^2, \quad
+       \sqrt{\frac{a^3}{\mu}} = 6855.92\ \text{s}, \quad T = 2\pi \times 6855.92 = 43\,077.0\ \text{s} \]
+    <p>That is 11 h 57 min 57 s, just 5 s short of half a sidereal day (43 082.0 s). A GPS satellite therefore
+      makes two orbits while the Earth turns once, and its ground track repeats every day, 4 minutes earlier each
+      solar day. Its speed is \(v = \sqrt{\mu/a} = 3.874\) km/s.</p>
+    <p><b>One satellite's coverage, mask 0°.</b> With \(\varepsilon = 0\) the formula of section 5 becomes
+      \(\cos\lambda = R/a\):</p>
+    \[ \frac{R}{a} = \frac{6378.137}{26\,559.7} = 0.240143, \quad \lambda = \arccos(0.240143) = 76.105^\circ, \quad
+       P = \frac{1 - 0.240143}{2} = 0.379928 \]
+    <p><b>All 24 satellites:</b> \(24 \times 0.379928 = 9.118\). <b>Mask 5°:</b>
+      \(R\cos 5^\circ/a = 0.239230\), \(\lambda = 76.159^\circ - 5^\circ = 71.159^\circ\), \(P = (1 - \cos 71.159^\circ)/2 = 0.338528\),
+      and \(24P = 8.125\). Raising the mask by 5° costs about one satellite on average.</p>
+    <div class="result">Result: \(T\) = <b data-check="gps_period_s">43,077.0</b> s; mask 0°: \(\lambda\) =
+      <b data-check="gps_lambda0_deg">76.105</b>°, \(P\) = <b data-check="gps_p0">0.37993</b>, expected number in view
+      <b data-check="gps_nview0">9.118</b>; mask 5°: \(\lambda\) = <b data-check="gps_lambda5_deg">71.159</b>°,
+      \(P\) = <b data-check="gps_p5">0.33853</b>, expected number in view <b data-check="gps_nview5">8.125</b>. The
+      Monte Carlo tab's mean number in view should land within its error bar of 9.118 (open sky).</div>
+
+    <h3>C. Langley's example: why the clock costs you height</h3>
+    <p>One satellite at the zenith and three at elevation 15°, at azimuths 0°, 120° and 240°. With
+      \(\sin15^\circ = 0.258819\) and \(\cos15^\circ = 0.965926\), the East-North-Up directions are</p>
+    \[ \hat{\mathbf{e}}_1 = (0, 0, 1),\quad \hat{\mathbf{e}}_2 = (0, 0.9659, 0.2588),\quad
+       \hat{\mathbf{e}}_3 = (0.8365, -0.4830, 0.2588),\quad \hat{\mathbf{e}}_4 = (-0.8365, -0.4830, 0.2588) \]
+    <p>Sum the products column by column. The horizontal entries are \(\tfrac32\cos^2 15^\circ = 1.399519\). The up entry
+      is \(1 + 3\sin^2 15^\circ = 1.200962\). The up–clock entry is \(-(1 + 3\sin15^\circ) = -1.776457\). The clock entry is 4.
+      Everything else is zero by symmetry:</p>
+    \[ G^{\mathsf T}G = \begin{pmatrix} 1.399519 & 0 & 0 & 0 \\ 0 & 1.399519 & 0 & 0 \\ 0 & 0 & 1.200962 & -1.776457 \\ 0 & 0 & -1.776457 & 4 \end{pmatrix} \]
+    <p>The horizontal part inverts entry by entry: \(Q_{EE} = Q_{NN} = 1/1.399519 = 0.714531\). The up–clock part is a
+      2×2 block, \(\begin{pmatrix} p & q \\ q & r \end{pmatrix}^{-1} = \frac{1}{pr - q^2}\begin{pmatrix} r & -q \\ -q & p \end{pmatrix}\),
+      with determinant \(1.200962 \times 4 - 1.776457^2 = 1.648048\):</p>
+    \[ Q_{UU} = \frac{4}{1.648048} = 2.427114, \qquad Q_{bb} = \frac{1.200962}{1.648048} = 0.728718, \qquad
+       Q_{Ub} = \frac{1.776457}{1.648048} = 1.077916 \]
+    <p>HDOP \(= \sqrt{2 \times 0.714531}\) and VDOP \(= \sqrt{2.427114}\). Now suppose the receiver had a perfect
+      clock. The fourth column of \(G\) disappears, the up entry is no longer tied to the clock, and
+      \(Q_{UU} = 1/1.200962 = 0.832666\).</p>
+    <div class="result">Result: HDOP <b data-check="langley_hdop">1.1954</b>, VDOP <b data-check="langley_vdop">1.5579</b>,
+      TDOP <b data-check="langley_tdop">0.8536</b>, PDOP <b data-check="langley_pdop">1.9637</b>,
+      GDOP <b data-check="langley_gdop">2.1412</b>. With the clock known: HDOP <b data-check="langley_hdop_known">1.1954</b>
+      (unchanged), VDOP <b data-check="langley_vdop_known">0.9125</b>. Langley (1999) prints 1.195, 1.558 and
+      0.913. The Compare tab shows the same check.</div>
+    <div class="note"><b>Why:</b> every satellite is above the horizon, so every \(\hat{\mathbf{e}}_i\) has a positive up
+      component. Moving the receiver up shortens every pseudorange, and a clock running early also shortens every
+      pseudorange. The two effects look alike, which shows up as the large off-diagonal \(Q_{Ub}\). Separating them
+      costs vertical precision. Horizontal errors are not affected, because east and north are not correlated with
+      the clock. This is why GPS is worse at height than at horizontal position.</div>
+
+    <h3>D. Solving Kepler's equation by Newton's method</h3>
+    <p>Take an orbit with \(e = 0.5\) at mean anomaly \(M = 60^\circ = 1.0471975512\) rad. The starting guess is
+      \(E_0 = M + 0.85\,e = 1.0471975512 + 0.425 = 1.4721975512\) rad. Each row is one step
+      \(E_{k+1} = E_k - f(E_k)/f'(E_k)\):</p>
+    <table>
+      <tr><th>\(k\)</th><th>\(E_k\) (rad)</th><th>\(f(E_k) = E_k - e\sin E_k - M\)</th><th>\(f'(E_k) = 1 - e\cos E_k\)</th><th>error \(\lvert E_k - E\rvert\)</th></tr>
+      <tr><td>0</td><td data-check="kepler_E0">1.4721975512</td><td>−7.257 × 10<sup>−2</sup></td><td>0.950780</td><td>7.5 × 10<sup>−2</sup></td></tr>
+      <tr><td>1</td><td data-check="kepler_E1">1.5485259386</td><td>1.452 × 10<sup>−3</sup></td><td>0.988866</td><td>1.5 × 10<sup>−3</sup></td></tr>
+      <tr><td>2</td><td data-check="kepler_E2">1.5470572106</td><td>5.392 × 10<sup>−7</sup></td><td>0.988132</td><td>5.5 × 10<sup>−7</sup></td></tr>
+      <tr><td>3</td><td data-check="kepler_E3">1.5470566649</td><td>7.4 × 10<sup>−14</sup></td><td>0.988131</td><td>7.5 × 10<sup>−14</sup></td></tr>
+      <tr><td>4</td><td data-check="kepler_E4">1.5470566649</td><td>0</td><td>0.988131</td><td>2 × 10<sup>−16</sup> (machine precision)</td></tr>
+    </table>
+    <p>The error goes \(10^{-2} \to 10^{-3} \to 10^{-7} \to 10^{-14}\). The number of correct digits roughly
+      <b>doubles</b> every step, which is the <em>quadratic convergence</em> of Newton's method. The step after
+      \(k = 3\) is \(7.5\times10^{-14}\), below the tolerance \(10^{-13}\), so <code>solve_kepler</code> stops after four steps.</p>
+    <p><b>Check by substitution:</b> \(E - e\sin E = 1.5470566649 - 0.5 \times 0.9997182275 = 1.0471975512 = M\). ✓ The
+      satellite is at \(r = a(1 - e\cos E) = 0.98813\,a\). Its true angle from perigee is
+      \(\nu = 2\arctan\!\big(\sqrt{\tfrac{1+e}{1-e}}\tan\tfrac{E}{2}\big) = 118.815^\circ\), well ahead of \(M = 60^\circ\)
+      because the satellite moves fastest just after perigee.</p>
+    <div class="result">Result: \(E\) = <b data-check="kepler_E_rad">1.5470566649</b> rad =
+      <b data-check="kepler_E_deg">88.6398</b>°, \(r/a\) = <b data-check="kepler_r_over_a">0.98813</b>,
+      \(\nu\) = <b data-check="kepler_nu_deg">118.815</b>°.</div>
+
+    <!-- ---------------------------------------------------------------------------------------- -->
+    <h2 id="ln-lim">7. Limitations, and why these choices were made</h2>
+    <p>Every model leaves things out. Each entry says what is simplified, why that choice was made, and how much it
+      matters for the results. The labels A1–A21 refer to the assumptions table in the README, which is kept up to
+      date.</p>
+
+    <h3>The Earth</h3>
+    <div class="lim"><h4>L1. The Earth is a perfect sphere (A1)</h4><dl>
+      <dt>Simplified</dt><dd>A sphere of radius 6378.137 km (the WGS-84 equatorial radius) instead of the WGS-84
+        ellipsoid, whose polar radius is 21.4 km smaller.</dd>
+      <dt>Why</dt><dd>"Up" is then simply \(\mathbf{r}/R\), and the coverage formula of section 5 is exact, which gives
+        an analytic check.</dd>
+      <dt>Effect</dt><dd>The sphere's "up" differs from the ellipsoid's by at most 0.19° (at 45° latitude), so
+        elevations are off by at most about 0.2°. This is negligible for DOP, and may contribute a little to the 0.01–0.05
+        differences from the FAA's 99.9% PDOP.</dd></dl></div>
+    <div class="lim"><h4>L2. Simplified Earth rotation and time (A2)</h4><dl>
+      <dt>Simplified</dt><dd>A constant rotation rate (one turn per 86 164.0905 s). No precession, nutation or polar
+        motion, and UTC is used in place of UT1.</dd>
+      <dt>Why</dt><dd>These effects change the Earth's orientation by at most tens of arcseconds over a year. Modelling
+        them needs Earth-orientation data tables and would not change any coverage or DOP statistic.</dd>
+      <dt>Effect</dt><dd>UT1 − UTC is under 0.9 s, about 0.004° of rotation. The Monte Carlo statistics do not depend
+        on the Earth's angle at all, because the receiver's inertial longitude is uniform anyway (A11).</dd></dl></div>
+
+    <h3>The satellites</h3>
+    <div class="lim"><h4>L3. Two-body Kepler orbits, no perturbations (A3)</h4><dl>
+      <dt>Simplified</dt><dd>No Earth oblateness (J2), atmospheric drag, Sun and Moon gravity, solar radiation
+        pressure or station-keeping manoeuvres.</dd>
+      <dt>Why</dt><dd>Kepler motion has an exact solution that can be tested (period, energy and angular momentum
+        conservation, the two-focus property). Perturbations at GPS altitude are slow, and the question is about
+        geometry, not precise orbit prediction.</dd>
+      <dt>Effect</dt><dd>J2 turns the GPS orbit planes by about −0.04°/day, roughly 14° a year. All the planes turn
+        together, so the shape of the constellation and the DOP statistics barely change. Absolute positions drift:
+        the 1999 almanac preset drifts by about 18 km/day from where the almanac puts the satellites (A19).</dd></dl></div>
+    <div class="lim"><h4>L4. Idealized, always-healthy constellations (A4, A14)</h4><dl>
+      <dt>Simplified</dt><dd>GPS is an ideal Walker 24/6/1, not the real slot assignments. Galileo and BeiDou use
+        their nominal designs. Spares are ignored and every satellite always works.</dd>
+      <dt>Why</dt><dd>It is a clean, reproducible baseline, and it is the reference design that the published
+        standards are built around. The real constellation changes from month to month.</dd>
+      <dt>Effect</dt><dd>It is <b>optimistic</b>. With the FAA method, the ideal Walker 24/6/1 has a global 99.9% PDOP
+        of 3.14, while the real 1999 constellation (27 satellites!) had 3.21–5.60 depending on the week. Evenly spaced
+        slots matter more than extra satellites. The Compare tab uses the real almanacs for exactly this reason.</dd></dl></div>
+    <div class="lim"><h4>L5. Failures are chosen by hand (A16)</h4><dl>
+      <dt>Simplified</dt><dd>Satellites switched off in the Constellation tab count as failed. There is no random
+        outage model.</dd>
+      <dt>Why</dt><dd>It shows directly how one specific failure degrades coverage. A probabilistic model would need
+        outage-rate data that this project does not have.</dd>
+      <dt>Effect</dt><dd>The availability shown is for <em>that</em> set of satellites, not an expected availability
+        averaged over typical outages.</dd></dl></div>
+
+    <h3>The receiver and its sky</h3>
+    <div class="lim"><h4>L6. A fixed receiver on the surface (A5)</h4><dl>
+      <dt>Simplified</dt><dd>Height 0, not moving. No antenna pattern and no multipath.</dd>
+      <dt>Why</dt><dd>The question is about a user on the surface of the Earth.</dd>
+      <dt>Effect</dt><dd>An aircraft or a mountain top sees slightly below the geometric horizon, which this model
+        leaves out.</dd></dl></div>
+    <div class="lim"><h4>L7. Purely geometric visibility (A6)</h4><dl>
+      <dt>Simplified</dt><dd>A satellite is usable if its elevation is at or above the blocking angle. No atmospheric
+        refraction and no signal-strength limit. The default mask is 0°.</dd>
+      <dt>Why</dt><dd>An elevation mask is the standard way to define visibility in coverage studies (the FAA uses 5°).
+        It also keeps the analytic check exact.</dd>
+      <dt>Effect</dt><dd>Refraction lifts a satellite's apparent elevation by about 0.5° at the horizon, which is
+        small. Real receivers often ignore satellites below 5–15° because their signals are noisy. Example B shows
+        that a 5° mask lowers the mean number in view from 9.118 to 8.125.</dd></dl></div>
+    <div class="lim"><h4>L8. Terrain is a cone-shaped valley (A18)</h4><dl>
+      <dt>Simplified</dt><dd>The walls rise to the same angle in every direction. Blocked satellites are fully hidden:
+        no diffraction, no partial blocking and no reflections.</dd>
+      <dt>Why</dt><dd>A cone behaves exactly like an elevation mask, so the analytic check still holds. The code has a
+        hook (<code>geometry.blocking_angle</code>) for direction-dependent shapes.</dd>
+      <dt>Effect</dt><dd>A real street or valley blocks some directions more than others (a street canyon may leave satellites only
+        along its length), which can make DOP much worse than the average wall height suggests. Multipath, often the largest error in cities, is not captured. For GPS
+        alone, availability falls from 100% in the open to 99.6% at 10°, 87.9% at 20°, 34.4% at 30° and 1.8% at 40°.</dd></dl></div>
+
+    <h3>The error model</h3>
+    <div class="lim"><h4>L9. Only geometry, with all satellites weighted equally (A7, A9)</h4><dl>
+      <dt>Simplified</dt><dd>DOP uses only the directions to the satellites. There is no ranging-error model
+        (ionosphere, troposphere, satellite clock and orbit errors), and every satellite gets the same weight.</dd>
+      <dt>Why</dt><dd>DOP separates the geometry, which is the scientific question here, from the signal errors, which
+        would need atmosphere and clock models. Position error ≈ DOP × range error, so a DOP result holds for any
+        error budget.</dd>
+      <dt>Effect</dt><dd>The app gives no position error in metres. Real low-elevation signals pass through more
+        atmosphere and are noisier. Weighting them equally makes low satellites look as useful as high ones, which
+        is <b>optimistic</b>.</dd></dl></div>
+    <div class="lim"><h4>L10. One receiver clock for all constellations (A8)</h4><dl>
+      <dt>Simplified</dt><dd>The unknowns are always \(x, y, z, b\), even when GPS, Galileo and BeiDou are mixed.</dd>
+      <dt>Why</dt><dd>This keeps the 4-column \(G\) of section 4. Real receivers either use broadcast time offsets
+        between the systems or solve for one extra clock unknown per extra system.</dd>
+      <dt>Effect</dt><dd><b>Optimistic</b> for mixed constellations, most of all when few satellites are visible
+        (deep valleys). It has no effect for GPS alone.</dd></dl></div>
+    <div class="lim"><h4>L11. "Good positioning" means PDOP ≤ 6 (A10)</h4><dl>
+      <dt>Simplified</dt><dd>A fix counts as good if at least 4 satellites are in view and PDOP ≤ 6.</dd>
+      <dt>Why</dt><dd>It is the limit used in the GPS SPS performance standard and the FAA reports, so the results can
+        be compared with them.</dd>
+      <dt>Effect</dt><dd>It is a convention, not physics. The threshold can be edited, and availability depends on it.</dd></dl></div>
+
+    <h3>The statistics</h3>
+    <div class="lim"><h4>L12. Monte Carlo sampling and its error bar (A11, A12)</h4><dl>
+      <dt>Simplified</dt><dd>Independent random places (uniform by area) and times (uniform over a window). The 95%
+        interval for availability is the normal approximation \(\pm1.96\sqrt{p(1-p)/n}\). At most 1,000,000 trials.</dd>
+      <dt>Why</dt><dd>It is the textbook binomial error and easy to check by hand. The trial limit keeps a run practical in the
+        browser.</dd>
+      <dt>Effect</dt><dd>The normal approximation is too narrow when \(p\) is very close to 0 or 1. If every trial is
+        good, it gives an interval of width 0, which does not mean availability is exactly 100%. Read intervals for
+        availabilities like 99.99% with care. A Wilson interval would fix this. A time window that is not a whole
+        number of repeat cycles weights part of a cycle more, by a few percent at most.</dd></dl></div>
+
+    <h3>The comparison with published data</h3>
+    <div class="lim"><h4>L13. Reproducing the FAA report needs some inferences (A19, A20)</h4><dl>
+      <dt>Simplified</dt><dd>The FAA report does not say which day of each week it used, which satellites it counted
+        as healthy, or exactly how "global 99.9% PDOP" is defined. We use the 24 h from each almanac's reference
+        time, and a definition that reproduces its values.</dd>
+      <dt>Why</dt><dd>These are the only choices the published information allows. Each one is stated, not hidden.</dd>
+      <dt>Effect</dt><dd>10 of 14 weeks match with no adjustment, and 3 match once the satellite set is inferred.
+        Week 1007 remains unexplained, and that is reported rather than forced (Compare tab, "?" marks).</dd></dl></div>
+
+    <h3>Only for the picture</h3>
+    <div class="lim"><h4>L14. Sun, Moon, Earth colours and satellite models (A21)</h4><dl>
+      <dt>Simplified</dt><dd>Low-precision Sun and Moon positions, no eclipses, no Earth shadow, stylized land
+        colours, and satellite models drawn far larger than life.</dd>
+      <dt>Why</dt><dd>They make the scene easier to read.</dd>
+      <dt>Effect</dt><dd>None. No DOP, coverage or Monte Carlo result uses them.</dd></dl></div>
+  </div>
+</div>
 <script type="module" src="main.js"></script>
 </body>
 </html>
