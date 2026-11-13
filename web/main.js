@@ -6,7 +6,7 @@ import { loadSim } from "./pyloader.js";
 import { initMonteCarlo } from "./mc.js";
 import { initConstellation } from "./constellation.js";
 import { initCompare } from "./compare.js";
-import { loadLandMask } from "./earth.js";
+import { loadLandMask, loadEarthColors } from "./earth.js";
 import { loadMoonAlbedo } from "./moon.js";
 import { initLearning } from "./learning.js";
 
@@ -112,6 +112,7 @@ async function main() {
   const api = await loadPython();
   loadingStep("Loading the Earth and Moon maps");
   const land = await loadLandMask("data/land_mask.json").catch((e) => { console.warn("no land grid:", e); return null; });
+  const earthColors = await loadEarthColors("data/earth_color.json").catch((e) => { console.warn("no Earth colours:", e); return null; });
   const moonAlbedo = await loadMoonAlbedo("data/moon_albedo.json").catch((e) => { console.warn("no Moon grid:", e); return null; });
   $("status").textContent = "Ready.";
   loadingStep("Building the globe");
@@ -181,7 +182,8 @@ async function main() {
     (i, x, y) => { Object.assign(hover, { i, x, y }); renderTip(); },
     land,
     (i) => cons.toggleSat(i),
-    moonAlbedo);
+    moonAlbedo,
+    earthColors);
 
   // ---- settings: the Sun, the Moon and where the light comes from (drawing only) ----------------------
   const applySky = () => globe.setSky({ showSun: $("set-sun").checked, showMoon: $("set-moon").checked,

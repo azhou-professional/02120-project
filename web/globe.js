@@ -19,7 +19,8 @@ const EARTH_CENTRE = new THREE.Vector3(0, 0, 0);
 // land: the land/ocean grid from earth.js (or null for a plain sphere).
 // onSatClick(i): satellite i was clicked (to switch it off or on).
 // moonAlbedo: the Moon's brightness grid from moon.js (or null for a plain grey Moon).
-export function createGlobe(container, onPick, onHover, land, onSatClick, moonAlbedo) {
+// earthColors: the land colour grid from earth.js (or null for the stylized colours by latitude).
+export function createGlobe(container, onPick, onHover, land, onSatClick, moonAlbedo, earthColors) {
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(45, 1, 0.01, 1000);    // far enough for the Moon (~60) and the Sun's sphere (SUN_DIST)
   camera.position.set(6, 4, 9);
@@ -54,7 +55,7 @@ export function createGlobe(container, onPick, onHover, land, onSatClick, moonAl
   // Low-poly Earth (land/ocean from the land grid) with a lat/lon graticule every 30 degrees
   // (equator and prime meridian highlighted). Without the land grid: a plain dark-blue sphere.
   const earth = new THREE.Mesh(
-    land ? buildEarthGeometry(land) : new THREE.SphereGeometry(1, 64, 48),
+    land ? buildEarthGeometry(land, earthColors) : new THREE.SphereGeometry(1, 64, 48),
     land ? new THREE.MeshPhongMaterial({ vertexColors: true, flatShading: true, shininess: 4, specular: 0x111111 })
          : new THREE.MeshPhongMaterial({ color: 0x1b3550, shininess: 8 }));
   earthGroup.add(earth);

@@ -51,6 +51,7 @@ handles the controls.
 | Moon brightness grid made from the NASA LRO map | `tools/moonmap.py` (reads `data/moon/lroc_color_poles_1k.jpg`, writes `web/data/moon_albedo.json`) |
 | Page icon | `web/favicon.svg` |
 | Land/ocean grid made from the Natural Earth outlines | `tools/landmask.py` (reads `data/ne_110m_land.geojson`, writes `web/data/land_mask.json`) |
+| Land colour grid made from the NASA Blue Marble (January) | `tools/earthmap.py` (reads `data/earth/world.200401.3x5400x2700.jpg`, writes `web/data/earth_color.json`) |
 | Real GPS orbits from 1999 almanacs (IS-GPS-200 algorithm) | `web/sim/almanac.py`, almanacs in `web/data/almanac/1999/` |
 | The FAA's coverage method; the reproduction of its Table 2-1 | `web/sim/faa.py`, `tools/reproduce_faa.py` -> `web/data/faa_reproduction.json` |
 | Compare tab (table, chart, PDOP map, Langley's values) and the published numbers; a "?" on each mismatched week explains the gap (size, likely cause, the assumptions involved) | `web/compare.js`, `web/data/published.json` |
@@ -196,7 +197,17 @@ The other data file is the Natural Earth 110 m land outline (`data/ne_110m_land.
 domain). It is used **only for the look of the Earth**: `tools/landmask.py` turns it into a
 1-degree land/ocean grid (28.9% of the surface area comes out as land, against about 29% in
 reality), and `web/earth.js` builds a flat-shaded icosphere of 5,120 triangles (edges about
-4 degrees, roughly 480 km) and colours each triangle by whether its centre is land. The colours
-(white polar caps, tan belts between 15 and 32 degrees latitude, green elsewhere, small random
-shade differences between triangles) are a stylization, not measured data. Nothing in the DOP or
-coverage results depends on it. To regenerate the grid: `python tools/landmask.py`.
+4 degrees, roughly 480 km) and colours each triangle by whether its centre is land. The ocean is
+one flat blue (white sea ice beyond 72 degrees latitude). Each land triangle takes the real colour of the
+ground at its centre, from NASA's Blue Marble Next Generation for January 2004 (NASA Earth Observatory,
+public domain, `data/earth/world.200401.3x5400x2700.jpg`, 5400 x 2700, cloud-free true colour), so January
+snow covers Canada and Siberia. `tools/earthmap.py` averages it into the same 1-degree cells as the land grid
+(`web/data/earth_color.json`, three bytes R, G, B per cell) and prints check colours (the Sahara comes out at
+R, G, B = 180, 138, 91, the Amazon at 26, 40, 11, Greenland at 248, 252, 253); `tests/test_earthmap.py` checks
+the averaging, the lookup rule and these places. A land cell on a coast also averages in some of the
+dark ocean, so coastal land is a little darker (mean brightness 142 against 162 inland). Small random shade
+differences between triangles give the faceted look. For legibility the land colours are then lightened
+and made more vivid, keeping their hue (`web/earth.js`: lightness to the power 0.7, saturation x 1.3; the
+Amazon becomes 52, 88, 13 and the Sahara 208, 166, 120). If the colour grid does not load, the land falls back
+to stylized colours by latitude. Nothing in the DOP or coverage results depends on any of this. To
+regenerate the grids: `python tools/landmask.py` and `python tools/earthmap.py` (needs Pillow).

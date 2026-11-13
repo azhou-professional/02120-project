@@ -1,6 +1,7 @@
 // Low-poly Earth: an icosphere (flat-shaded triangles) coloured land / ocean from the
-// Natural Earth land grid made by tools/landmask.py. The colours are a stylization
-// (white polar caps, tan subtropical belts, green elsewhere), not measured data.
+// Natural Earth land grid made by tools/landmask.py. Each land triangle takes the real colour
+// of the ground at its centre, from the NASA Blue Marble (January) grid made by tools/earthmap.py.
+// The ocean is one flat blue (white sea ice near the poles). Only for the look.
 import * as THREE from "three";
 
 /** Load web/data/land_mask.json -> { isLand(latDeg, lonDeg) }. */
@@ -15,6 +16,22 @@ export async function loadLandMask(url) {
       const col = Math.min(width - 1, Math.max(0, Math.floor(((lon + 180) * width) / 360)));
       const i = row * width + col;
       return ((bytes[i >> 3] >> (7 - (i & 7))) & 1) === 1;
+    },
+  };
+}
+
+/** Load web/data/earth_color.json -> { rgb(latDeg, lonDeg) } with r, g, b in 0..1. */
+export async function loadEarthColors(url) {
+  const info = await (await fetch(url)).json();
+  const bytes = Uint8Array.from(atob(info.rgb), (c) => c.charCodeAt(0));
+  const { width, height } = info;
+  return {
+    // same rule as tools/earthmap.py color(): row 0 is the northernmost row, row-major, 3 bytes per cell
+    rgb(lat, lon) {
+      const row = Math.min(height - 1, Math.max(0, Math.floor(((90 - lat) * height) / 180)));
+      const col = Math.min(width - 1, Math.max(0, Math.floor(((lon + 180) * width) / 360)));
+      const i = 3 * (row * width + col);
+      return [bytes[i] / 255, bytes[i + 1] / 255, bytes[i + 2] / 255];
     },
   };
 }
@@ -54,9 +71,23 @@ const SNOW = new THREE.Color("#eef3f6"), DESERT = new THREE.Color("#c9b37c"), GR
 // different shade (this is what makes the faceted look) and the picture is the same every time
 export const jitter = (i) => { const s = Math.sin(i * 12.9898) * 43758.5453; return (s - Math.floor(s)) * 2 - 1; };
 
-function faceColor(land, lat, i) {
+// The true colours are dark (the Amazon is R, G, B = 26, 40, 11), so land colours are lightened for
+// legibility, keeping the hue: lightness -> lightness^LAND_GAMMA (lifts dark colours a lot, bright ones
+// hardly at all, so snow does not wash out) and saturation x LAND_SATURATION (capped at 1).
+// Sahara 180, 138, 91 -> 208, 166, 120; Amazon 26, 40, 11 -> 52, 88, 13. Set both to 1 for the true colours.
+const LAND_GAMMA = 0.7, LAND_SATURATION = 1.3;
+function brighten(color) {
+  const hsl = color.getHSL({}, THREE.SRGBColorSpace);      // in sRGB, the same space as the image
+  return color.setHSL(hsl.h, Math.min(1, hsl.s * LAND_SATURATION), hsl.l ** LAND_GAMMA, THREE.SRGBColorSpace);
+}
+
+// colors: the Blue Marble grid (or null: then the old stylized land colours by latitude band are used)
+function faceColor(land, lat, lon, i, colors) {
   const a = Math.abs(lat);
-  const base = land ? (a >= 68 ? SNOW : a >= 15 && a <= 32 ? DESERT : GREEN) : (a >= 72 ? SEA_ICE : OCEAN);
+  let base;
+  if (!land) base = a >= 72 ? SEA_ICE : OCEAN;
+  else if (colors) base = brighten(new THREE.Color().setRGB(...colors.rgb(lat, lon), THREE.SRGBColorSpace));
+  else base = a >= 68 ? SNOW : a >= 15 && a <= 32 ? DESERT : GREEN;
   return base.clone().multiplyScalar(1 + 0.07 * jitter(i));
 }
 
@@ -65,7 +96,7 @@ function faceColor(land, lat, i) {
  * (x, y, z north) and toScene maps physical (x, y, z) -> scene (x, z, -y), so a triangle's
  * Earth-fixed position is physical = (sx, -sz, sy).
  */
-export function buildEarthGeometry(land, level = 4) {
+export function buildEarthGeometry(land, landColors = null, level = 4) {
   const { verts, faces } = icosphere(level);
   const positions = new Float32Array(faces.length * 9);
   const colors = new Float32Array(faces.length * 9);
@@ -79,7 +110,7 @@ export function buildEarthGeometry(land, level = 4) {
     const px = centre[0], py = -centre[2], pz = centre[1];
     const lat = (Math.asin(pz / Math.hypot(px, py, pz)) * 180) / Math.PI;
     const lon = (Math.atan2(py, px) * 180) / Math.PI;
-    const col = faceColor(land.isLand(lat, lon), lat, i);
+    const col = faceColor(land.isLand(lat, lon), lat, lon, i, landColors);
     [a, b, c].forEach((v, k) => {
       positions.set(v, 9 * i + 3 * k);
       colors.set([col.r, col.g, col.b], 9 * i + 3 * k);
