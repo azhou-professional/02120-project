@@ -14,3 +14,4 @@
 3. **Understand project on startup.** This involves looking at the project requirements in `Project_Description_F26.pdf`, looking at the proposal in `proposal.md`, and looking at the code to see the structure.
 4. **Always consult the programmer.** When making high-level technical decisions and implementation choices, always ask the programmer to make the choice.
 5. **Keep the Learning tab in step with the assumptions.** Whenever a modelling assumption is added or changed (README assumptions table A1, A2, ...), also update the Learning tab (`<div id="learn">` in `web/index.html`): the Limitations entry (what is simplified, why, and its effect), and any equation or worked example the change affects. If a worked-example number changes, update its `data-check` value and run `tests/test_learning.py`.
+6. **Allow user to make commit messages.** Per course requirements, make the user write them. Suggest contents.
