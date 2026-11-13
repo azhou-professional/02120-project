@@ -36,6 +36,10 @@ export function initLearning() {
 
   btn.addEventListener("click", () => (panel.hidden ? open() : close()));
   $("learn-close").addEventListener("click", close);
+  // clicking any other tab (Live, Monte Carlo, ...) closes the Learning panel
+  for (const other of document.querySelectorAll(".tab")) {
+    if (other !== btn) other.addEventListener("click", close);
+  }
   document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !panel.hidden) close(); });
   // the table of contents scrolls inside the panel rather than jumping the whole page
   for (const a of panel.querySelectorAll("nav a")) {
